@@ -8,7 +8,7 @@ Licensed under the Apache License, Version 2.0; see LICENSE.
 Modifications: Synology blue branding and custom-element namespaces;
 default Synology DSM entity discovery and volume/SMART presentation;
 default Portainer endpoint-scoped discovery and entity-based controls;
-visual editors, missing-capability messages, standalone HACS packaging
-and Synology-specific tests.
+visual editors, HACS integration packaging with optional Portainer setup,
+selective frontend bundles, and Synology-specific tests.
 
 This project is not affiliated with Synology, Unraid, or Portainer.
