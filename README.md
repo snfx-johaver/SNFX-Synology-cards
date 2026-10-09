@@ -35,6 +35,11 @@ reload your browser. Do not load both the manual and HACS copies.
 Add a card and search for **Synology Unified Dashboard Card**, or any of the
 individual cards below. Every card has a visual editor.
 
+All four cards default to **Full width** and **Auto height** in Home Assistant's
+Sections layout. You can change these in the card editor's **Layout** tab.
+Existing explicit `grid_options` or legacy `layout_options` take precedence;
+reset them to use the new defaults, or enable both switches manually.
+
 Select your **Synology NAS**. For Docker, explicitly select the **Synology
 Portainer endpoint**. The card never guesses which endpoint is Synology:
 containers must be Portainer container devices descending from that exact

@@ -80,6 +80,13 @@ describe("Cards", () => {
     expect(customElements.get("synology-shares-card")).toBeUndefined();
     expect(customElements.get("synology-vm-card")).toBeUndefined();
   });
+  it("defaults every card to full width and automatic height", () => {
+    for (const entry of window.customCards!) {
+      const card = document.createElement(entry.type) as BaseSynologyCard;
+      card.setConfig({ type: `custom:${entry.type}` });
+      expect(card.getGridOptions()).toEqual({ columns: "full", rows: "auto", min_columns: 3 });
+    }
+  });
   it("renders real overview values, not healthy/zero fallbacks", async () => {
     const hass = createFixture();
     const card = await mount("synology-server-card", {}, hass);

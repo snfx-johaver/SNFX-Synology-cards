@@ -81,7 +81,7 @@ export abstract class BaseSynologyCard extends LitElement {
     this.toggleAttribute("embedded", !!config.embedded);
   }
   getCardSize(): number { return 4; }
-  getGridOptions() { return { columns: 6, rows: 4, min_columns: 3, min_rows: 3 }; }
+  getGridOptions() { return { columns: "full", rows: "auto", min_columns: 3 }; }
   protected getActiveDevice() { return selectedDevice(this.config, this.registries); }
   protected getEntity(key: string, domain?: string) {
     const mapped = this.config.entities?.[key];
