@@ -110,6 +110,17 @@ describe("Scoped discovery and values", () => {
     }
     expect(scans).toBe(1);
   });
+  it("lists system devices, not similarly named DSM records or orphaned storage", () => {
+    const hass = createFixture();
+    hass.devices!.phantom = { id: "phantom", name: "DiskStation", identifiers: [["synology_dsm", "serial_legacy"]] };
+    hass.devices!.usb = { id: "usb", name: "DiskStation", identifiers: [["synology_dsm", "serial_usb"]] };
+    hass.entities!["sensor.usb_size"] = { entity_id: "sensor.usb_size", device_id: "usb", platform: "synology_dsm", translation_key: "device_size_total" };
+    delete hass.devices!.volume!.via_device_id;
+    hass.devices!.nas2!.name = "DiskStation";
+    const devices = synologyDevices({ devices: hass.devices!, entities: hass.entities! });
+    expect(devices.map((device) => device.id)).toEqual(["nas", "nas2"]);
+    expect(devices.map((device) => device.name)).toEqual(["DiskStation", "DiskStation"]);
+  });
   it("recognizes DSM devices through scoped entities when identifiers are omitted", async () => {
     const hass = createFixture();
     for (const device of Object.values(hass.devices!)) delete device.identifiers;

@@ -107,7 +107,9 @@ to poll before expecting values.
 
 The NAS is auto-selected only when exactly one Synology DSM NAS device exists.
 Saved selections that no longer exist do not fall back to another NAS.
-NAS discovery recognizes DSM system sensors even when the NAS is linked to
+Only devices with DSM CPU, RAM or system sensors appear in the NAS selector;
+non-system DSM records, storage devices and empty orphaned records are excluded.
+Devices are not merged by name. Discovery recognizes system sensors even when the NAS is linked to
 another device. Storage traversal supports both `via_device_id` and
 `parent_device_id` relationships.
 Integration-scoped entity metadata also identifies DSM devices when device

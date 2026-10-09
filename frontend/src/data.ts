@@ -38,10 +38,11 @@ function registryIndex(registries: Registries): RegistryIndex {
   }
   const synology = Object.values(registries.devices).filter((device) => {
     const entities = entitiesByDevice.get(device.id)?.filter((entity) => entity.platform === "synology_dsm") ?? [];
-    if (!hasDomain(device, "synology_dsm") && !entities.length) return false;
-    if (entities.some((entity) => ["cpu_total_load", "memory_real_usage", "uptime"].some((key) => entityMatches(entity, key)))) return true;
-    return !device.parent_device_id && !device.via_device_id &&
-      !entities.some((entity) => ["volume_percentage_used", "volume_status", "disk_status"].some((key) => entityMatches(entity, key)));
+    return entities.some((entity) => [
+      "cpu_total_load", "cpu_user_load", "cpu_system_load",
+      "memory_real_usage", "memory_total_real", "memory_available_real",
+      "temperature", "uptime",
+    ].some((key) => entityMatches(entity, key)));
   });
   const index = {
     entitiesByDevice, synology,
