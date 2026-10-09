@@ -40,6 +40,11 @@ replaced in an already-open page. Hard-refresh every open Home Assistant browser
 tab after migration. Existing card types, NAS IDs, mappings and layout settings
 remain compatible; keep Docker enabled if your dashboards use Docker cards.
 
+Installing through HACS alone does not activate the integration. Complete
+**Devices & services -> Add integration -> SNFX Synology Cards**; otherwise
+the new bundle is not loaded automatically and an old Dashboard resource can
+continue loading the previous cards.
+
 ### Manual
 
 Copy the entire `custom_components/synology_cards` directory into your Home
@@ -108,6 +113,9 @@ another device. Storage traversal supports both `via_device_id` and
 Integration-scoped entity metadata also identifies DSM devices when device
 identifiers are omitted. Registry metadata is indexed once per snapshot and
 loaded once per HA connection, not on every sensor update.
+Editors ignore state-only updates; cards redraw only for readings belonging to
+their selected NAS/endpoint or explicit entity mappings. Discovery/configuration
+changes still update both.
 Discovery uses full HA registry metadata so renamed entities work; if older
 metadata omits stable keys, a suffix fallback is still restricted to the selected
 device and integration.

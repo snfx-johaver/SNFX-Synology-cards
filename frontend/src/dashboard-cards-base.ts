@@ -1,8 +1,8 @@
 import { LitElement, html, nothing, type PropertyValues, type TemplateResult } from "lit";
 import { type CardConfig } from "./config";
 import { dashboardCardStyles } from "./dashboard-cards-styles";
-import { fireEvent, type HomeAssistant } from "./ha-types";
-import { cachedRegistries, deviceEntity, loadRegistries, selectedDevice, type Registries } from "./data";
+import { fireEvent, type HassEntity, type HomeAssistant } from "./ha-types";
+import { belongsTo, cachedRegistries, deviceEntity, loadRegistries, selectedDevice, type Registries } from "./data";
 import { iconTemplate } from "./icons";
 
 const entityKeys: Record<string, string> = {
@@ -31,6 +31,10 @@ export abstract class BaseSynologyCard extends LitElement {
   declare actionError: string;
   private registryKey?: object;
   private requestVersion = 0;
+  private watchedConfig?: CardConfig;
+  private watchedRegistries?: Registries;
+  private watchedEntities: string[] = [];
+  private renderedStates = new Map<string, HassEntity | undefined>();
 
   constructor() {
     super();
@@ -38,6 +42,41 @@ export abstract class BaseSynologyCard extends LitElement {
     this.registries = { devices: {}, entities: {} };
     this.registryError = "";
     this.actionError = "";
+  }
+
+  protected override shouldUpdate(changes: PropertyValues<this>): boolean {
+    if (changes.size !== 1 || !changes.has("hass")) return true;
+    const previous = changes.get("hass");
+    if (!previous || !this.hass) return true;
+    if ((previous.connection ?? previous.callWS) !== (this.hass.connection ?? this.hass.callWS)) return true;
+    if (!this.hass.callWS && (previous.devices !== this.hass.devices || previous.entities !== this.hass.entities)) return true;
+    const snapshot = cachedRegistries(this.hass);
+    if (snapshot && snapshot !== this.registries) return true;
+    this.updateWatchedEntities();
+    return this.watchedEntities.some((id) => this.renderedStates.get(id) !== this.hass!.states[id]);
+  }
+
+  private updateWatchedEntities(): void {
+    if (this.watchedConfig !== this.config || this.watchedRegistries !== this.registries) {
+      const server = this.getActiveDevice()?.id;
+      const docker = this.config.type.includes("docker") || this.config.type.includes("dashboard");
+      const endpoint = docker ? this.config.portainer_endpoint : undefined;
+      const ids = new Set(Object.values(this.config.entities ?? {}));
+      for (const entity of Object.values(this.registries.entities)) {
+        const device = entity.device_id ? this.registries.devices[entity.device_id] : undefined;
+        if ((server && entity.platform === "synology_dsm" && belongsTo(device, server, this.registries.devices)) ||
+            (endpoint && entity.platform === "portainer" && belongsTo(device, endpoint, this.registries.devices))) ids.add(entity.entity_id);
+      }
+      this.watchedEntities = [...ids];
+      this.watchedConfig = this.config;
+      this.watchedRegistries = this.registries;
+    }
+  }
+
+  protected override updated(changes: PropertyValues<this>): void {
+    super.updated(changes);
+    this.updateWatchedEntities();
+    this.renderedStates = new Map(this.watchedEntities.map((id) => [id, this.hass?.states[id]]));
   }
 
   override willUpdate(changes: PropertyValues<this>): void {

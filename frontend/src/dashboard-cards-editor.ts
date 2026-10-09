@@ -3,6 +3,7 @@ import { type CardConfig } from "./config";
 import { fireEvent, type HomeAssistant } from "./ha-types";
 import { cachedRegistries, loadRegistries, portainerEndpoints, synologyDevices, type Registries } from "./data";
 import { PORTAINER_ENABLED } from "./features";
+import { live } from "lit/directives/live.js";
 
 export const mappingFields: Record<string, string> = {
   cpu_usage: "CPU utilization (%)", ram_usage: "Memory utilization (%)",
@@ -68,6 +69,15 @@ export class SynologyCardEditor extends LitElement {
     }
   }
   setConfig(config: CardConfig): void { this._config = { ...config }; }
+  protected override shouldUpdate(changes: PropertyValues<this>): boolean {
+    if (changes.size !== 1 || !changes.has("hass")) return true;
+    const previous = changes.get("hass");
+    if (!previous || !this.hass) return true;
+    if ((previous.connection ?? previous.callWS) !== (this.hass.connection ?? this.hass.callWS)) return true;
+    if (!this.hass.callWS) return previous.devices !== this.hass.devices || previous.entities !== this.hass.entities;
+    const snapshot = cachedRegistries(this.hass);
+    return !!snapshot && snapshot !== this.registries;
+  }
   private changed(key: string, value: unknown): void {
     if (!this._config) return;
     this._config = { ...this._config, [key]: value };
@@ -90,14 +100,14 @@ export class SynologyCardEditor extends LitElement {
     const fields = dashboard || config.type.includes("server") ? Object.entries(mappingFields) : [];
     return html`<div class="card-config">
       ${this.error ? html`<div role="alert">${this.error}</div>` : nothing}
-      <label>Synology NAS<select aria-label="Synology NAS" ?disabled=${this.loading} .value=${config.server || ""}
+      <label>Synology NAS<select aria-label="Synology NAS" ?disabled=${this.loading} .value=${live(config.server || "")}
         @change=${(event: Event) => this.changed("server", (event.target as HTMLSelectElement).value)}>
         <option value="">${this.loading ? "Loading Synology devices..." : devices.length === 1 ? `Auto: ${devices[0]!.name}` : "Select a Synology DSM NAS"}</option>
         ${devices.map((device) => html`<option value=${device.id} ?selected=${config.server === device.id}>${device.name_by_user || device.name}</option>`)}
         ${config.server && !devices.some((device) => device.id === config.server) ? html`<option value=${config.server} selected>Unavailable: ${config.server}</option>` : nothing}
       </select></label>
       ${!this.loading && !this.error && !devices.length ? html`<p>No Synology DSM NAS found in the device/entity registries. Use Refresh entity discovery to retry.</p>` : nothing}
-      ${docker ? html`<label>Synology Portainer endpoint<select aria-label="Synology Portainer endpoint" .value=${config.portainer_endpoint || ""}
+      ${docker ? html`<label>Synology Portainer endpoint<select aria-label="Synology Portainer endpoint" ?disabled=${this.loading} .value=${live(config.portainer_endpoint || "")}
         @change=${(event: Event) => this.changed("portainer_endpoint", (event.target as HTMLSelectElement).value)}>
         <option value="">Select explicitly (required for Docker)</option>
         ${endpoints.map((endpoint) => html`<option value=${endpoint.id} ?selected=${config.portainer_endpoint === endpoint.id}>${endpoint.name_by_user || endpoint.name}</option>`)}

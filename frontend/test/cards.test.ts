@@ -7,6 +7,7 @@ import { createFixture, state } from "./fixture";
 import type { CardConfig } from "../src/config";
 import type { HomeAssistant } from "../src/ha-types";
 import * as discovery from "../src/data";
+import { html, type PropertyValues } from "lit";
 
 afterEach(() => document.body.replaceChildren());
 
@@ -122,6 +123,36 @@ describe("Scoped discovery and values", () => {
 });
 
 describe("Cards", () => {
+  it("skips unrelated updates but renders NAS readings and explicit mappings when they change", async () => {
+    class CountingCard extends BaseSynologyCard {
+      updates = 0;
+      protected override render() {
+        return html`<span>${this.getEntity("cpu_usage")?.state}</span>`;
+      }
+      protected override updated(changes: PropertyValues<this>): void {
+        super.updated(changes);
+        this.updates++;
+      }
+    }
+    customElements.define("synology-counting-test-card", CountingCard);
+    const hass = createFixture();
+    const card = await mount("synology-counting-test-card", {}, hass) as CountingCard;
+    const initial = card.updates;
+    for (let i = 0; i < 100; i++) {
+      card.hass = { ...hass, states: { ...hass.states, "sensor.unrelated": state("sensor.unrelated", String(i)) } };
+      await card.updateComplete;
+    }
+    expect(card.updates).toBe(initial);
+    card.hass = { ...hass, states: { ...hass.states, "sensor.renamed_cpu": state("sensor.renamed_cpu", "22", "%") } };
+    await card.updateComplete;
+    expect(card.updates).toBe(initial + 1);
+    expect(card.shadowRoot!.querySelector("span")!.textContent).toBe("22");
+    card.setConfig({ type: "custom:synology-counting-test-card", server: "nas", entities: { cpu_usage: "sensor.manual" } });
+    await card.updateComplete;
+    card.hass = { ...hass, states: { ...hass.states, "sensor.manual": state("sensor.manual", "33", "%") } };
+    await card.updateComplete;
+    expect(card.shadowRoot!.querySelector("span")!.textContent).toBe("33");
+  });
   it("registers only the four supported cards and their visual editors", () => {
     expect(window.customCards).toHaveLength(4);
     for (const entry of window.customCards!) {
@@ -281,6 +312,27 @@ describe("Cards", () => {
 });
 
 describe("Visual editor", () => {
+  it("does not render the editor again for unrelated sensor updates", async () => {
+    class CountingEditor extends SynologyCardEditor {
+      renders = 0;
+      protected override render() { this.renders++; return super.render(); }
+    }
+    customElements.define("synology-counting-test-editor", CountingEditor);
+    const editor = document.createElement("synology-counting-test-editor") as CountingEditor;
+    const hass = createFixture();
+    editor.hass = hass;
+    editor.setConfig({ type: "custom:synology-dashboard-card", server: "nas", portainer_endpoint: "synEndpoint" });
+    document.body.append(editor);
+    await editor.updateComplete;
+    const initial = editor.renders;
+    for (let i = 0; i < 100; i++) {
+      editor.hass = { ...hass, states: { ...hass.states, "sensor.unrelated": state("sensor.unrelated", String(i)) } };
+      await editor.updateComplete;
+    }
+    expect(editor.renders).toBe(initial);
+    expect(editor.shadowRoot!.querySelector<HTMLSelectElement>('[aria-label="Synology NAS"]')!.value).toBe("nas");
+    expect(editor.shadowRoot!.querySelector<HTMLSelectElement>('[aria-label="Synology Portainer endpoint"]')!.value).toBe("synEndpoint");
+  });
   it("does not restart discovery on state updates, and refresh reaches existing cards", async () => {
     const fixture = createFixture();
     const connection = {};

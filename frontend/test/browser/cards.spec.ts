@@ -146,3 +146,44 @@ test("storage editor stays responsive with a large registry and incomplete devic
   await expect(page.getByText("SMART: normal")).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Other NAS (Volume 1)", exact: true })).toBeVisible();
 });
+
+test("editor selections and live readings survive sustained unrelated HA updates", async ({ page }) => {
+  await mount(page, "synology-dashboard-card");
+  await page.evaluate(() => {
+    const card = document.querySelector("synology-dashboard-card") as BaseSynologyCard;
+    const editor = document.createElement("synology-dashboard-card-editor") as HTMLElement & {
+      hass?: HomeAssistant; setConfig(config: CardConfig): void;
+    };
+    editor.setConfig({ type: "custom:synology-dashboard-card", server: "nas", portainer_endpoint: "synEndpoint" });
+    editor.hass = card.hass;
+    document.querySelector("#cards")!.append(editor);
+  });
+  const elapsed = await page.evaluate(async () => {
+    const card = document.querySelector("synology-dashboard-card") as BaseSynologyCard;
+    const editor = document.querySelector("synology-dashboard-card-editor") as HTMLElement & {
+      hass?: HomeAssistant; updateComplete: Promise<boolean>;
+    };
+    const hass = card.hass!;
+    const start = performance.now();
+    for (let i = 0; i < 200; i++) {
+      const next = { ...hass, states: { ...hass.states, "sensor.unrelated": {
+        entity_id: "sensor.unrelated", state: String(i), attributes: {}, last_changed: "", last_updated: "",
+      } } };
+      card.hass = next;
+      editor.hass = next;
+      await Promise.all([card.updateComplete, editor.updateComplete]);
+    }
+    const elapsed = performance.now() - start;
+    card.hass = { ...hass, states: { ...hass.states, "sensor.renamed_cpu": {
+      ...hass.states["sensor.renamed_cpu"]!, state: "24.75",
+    } } };
+    await card.updateComplete;
+    return elapsed;
+  });
+  expect(elapsed).toBeLessThan(500);
+  await expect(page.getByLabel("Synology NAS", { exact: true })).toHaveValue("nas");
+  await expect(page.getByLabel("Synology Portainer endpoint", { exact: true })).toHaveValue("synEndpoint");
+  await expect(page.getByText("24.75%", { exact: true })).toBeVisible();
+  await page.getByRole("tab", { name: "Docker", exact: true }).click();
+  await expect(page.getByText("Plex", { exact: true })).toBeVisible();
+});
