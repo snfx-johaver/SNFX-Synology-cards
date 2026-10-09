@@ -2,7 +2,7 @@ import { LitElement, html, nothing, type PropertyValues, type TemplateResult } f
 import { type CardConfig } from "./config";
 import { dashboardCardStyles } from "./dashboard-cards-styles";
 import { fireEvent, type HomeAssistant } from "./ha-types";
-import { deviceEntity, loadRegistries, selectedDevice, type Registries } from "./data";
+import { cachedRegistries, deviceEntity, loadRegistries, selectedDevice, type Registries } from "./data";
 import { iconTemplate } from "./icons";
 
 const entityKeys: Record<string, string> = {
@@ -47,9 +47,12 @@ export abstract class BaseSynologyCard extends LitElement {
       const key = this.hass.connection ?? this.hass.callWS ?? this.hass;
       if (!this.hass.callWS) {
         this.registries = { devices: this.hass.devices ?? {}, entities: this.hass.entities ?? {} };
-      } else if (key !== this.registryKey || !this.registryError) {
+      } else if (key !== this.registryKey) {
         this.registryKey = key;
         void this.refreshRegistries();
+      } else {
+        const snapshot = cachedRegistries(this.hass);
+        if (snapshot) this.registries = snapshot;
       }
     }
   }

@@ -99,12 +99,20 @@ test("visual editor preserves selections and entity overrides", async ({ page })
   expect(JSON.parse(config!).tabs).toEqual(["overview", "docker"]);
 });
 
-test("storage editor lists linked NAS devices and selection loads only their storage", async ({ page }) => {
+test("storage editor stays responsive with a large registry and incomplete device metadata", async ({ page }) => {
   await mount(page, "synology-storage-card", { server: "" });
   await page.evaluate(() => {
     const card = document.querySelector("synology-storage-card") as BaseSynologyCard;
     const fixture = card.hass!;
     fixture.devices!.nas!.via_device_id = "unraid";
+    for (const device of Object.values(fixture.devices!)) {
+      if (device.identifiers?.some(([domain]) => domain === "synology_dsm")) delete device.identifiers;
+    }
+    for (let i = 0; i < 5000; i++) {
+      const id = `unrelated_${i}`;
+      fixture.devices![id] = { id, name: id, identifiers: [["other", id]] };
+      fixture.entities![`sensor.${id}`] = { entity_id: `sensor.${id}`, device_id: id, platform: "other" };
+    }
     for (const id of ["volume", "disk", "disk2"]) {
       fixture.devices![id]!.parent_device_id = "nas";
       delete fixture.devices![id]!.via_device_id;
@@ -128,9 +136,11 @@ test("storage editor lists linked NAS devices and selection loads only their sto
     });
     document.querySelector("#cards")!.prepend(editor);
   });
+  const start = Date.now();
   await page.getByLabel("Synology NAS", { exact: true }).selectOption("nas");
   await expect(page.getByLabel("Synology NAS", { exact: true })).toHaveValue("nas");
   await expect(page.getByText("SMART: normal")).toHaveCount(2);
+  expect(Date.now() - start).toBeLessThan(1500);
   await expect(page.getByText("Unavailable fields / setup notes")).toHaveCount(0);
   await page.getByLabel("Synology NAS", { exact: true }).selectOption("nas2");
   await expect(page.getByText("SMART: normal")).toHaveCount(0);

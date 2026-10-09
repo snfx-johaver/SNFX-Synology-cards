@@ -2,7 +2,7 @@ import { html, nothing, type TemplateResult } from "lit";
 import { STORAGE_CARD_TAG, STORAGE_EDITOR_TAG } from "./config";
 import { BaseSynologyCard } from "./dashboard-cards-base";
 import { SynologyStorageCardEditor } from "./dashboard-cards-editor";
-import { bytes, deviceEntity, entityMatches, formatBytes, formatValue, nasChildren, percentage, storageSummary, usable, volumeData } from "./data";
+import { bytes, deviceEntities, deviceEntity, entityMatches, formatBytes, formatValue, nasChildren, percentage, storageSummary, usable, volumeData } from "./data";
 import { iconTemplate, mdiHarddisk } from "./icons";
 import { registerDashboardCard } from "./register-dashboard-card";
 
@@ -13,7 +13,7 @@ export class SynologyStorageCard extends BaseSynologyCard {
     const volumes = volumeData(this.hass, this.config, this.registries);
     const summary = storageSummary(this.hass, this.config, this.registries);
     const disks = nasChildren(this.config, this.registries).filter((device) =>
-      Object.values(this.registries.entities).some((entity) => entity.device_id === device.id &&
+      deviceEntities(this.registries, device.id).some((entity) => entity.platform === "synology_dsm" &&
         (entityMatches(entity, "disk_status") || entity.entity_id.endsWith("_disk_status")))
     );
     return html`<ha-card>

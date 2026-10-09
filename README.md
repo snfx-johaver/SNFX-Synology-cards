@@ -66,6 +66,9 @@ Saved selections that no longer exist do not fall back to another NAS.
 NAS discovery recognizes DSM system sensors even when the NAS is linked to
 another device. Storage traversal supports both `via_device_id` and
 `parent_device_id` relationships.
+Integration-scoped entity metadata also identifies DSM devices when device
+identifiers are omitted. Registry metadata is indexed once per snapshot and
+loaded once per HA connection, not on every sensor update.
 Discovery uses full HA registry metadata so renamed entities work; if older
 metadata omits stable keys, a suffix fallback is still restricted to the selected
 device and integration.

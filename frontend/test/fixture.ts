@@ -34,6 +34,7 @@ export function createFixture(): HomeAssistant {
     };
   };
   add("sensor.renamed_cpu", "nas", "cpu_total_load", "18", "%");
+  add("sensor.other_cpu", "nas2", "cpu_total_load", "99", "%");
   add("sensor.memory", "nas", "memory_real_usage", "42", "%");
   add("sensor.ram_total", "nas", "memory_total_real", "8", "GiB");
   add("sensor.ram_available", "nas", "memory_available_real", "4.64", "GiB");

@@ -12,7 +12,7 @@ export interface DeviceRegistryEntry {
   id: string;
   name: string;
   name_by_user?: string | null;
-  identifiers: [string, string][];
+  identifiers?: [string, string][];
   manufacturer?: string | null;
   model?: string | null;
   sw_version?: string | null;

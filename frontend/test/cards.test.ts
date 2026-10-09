@@ -6,6 +6,7 @@ import { belongsTo, bytes, deviceEntity, formatBytes, formatRate, loadRegistries
 import { createFixture, state } from "./fixture";
 import type { CardConfig } from "../src/config";
 import type { HomeAssistant } from "../src/ha-types";
+import * as discovery from "../src/data";
 
 afterEach(() => document.body.replaceChildren());
 
@@ -90,6 +91,33 @@ describe("Scoped discovery and values", () => {
     expect(callWS).toHaveBeenCalledTimes(2);
     await loadRegistries(hass, true);
     expect(callWS).toHaveBeenCalledTimes(4);
+  });
+  it("indexes registry metadata once instead of scanning every entity per device and render", () => {
+    const hass = createFixture();
+    for (let i = 0; i < 5000; i++) {
+      const id = `unrelated_${i}`;
+      hass.devices![id] = { id, name: id, identifiers: [["other", id]] };
+      hass.entities![`sensor.${id}`] = { entity_id: `sensor.${id}`, device_id: id, platform: "other" };
+    }
+    let scans = 0;
+    const entities = new Proxy(hass.entities!, { ownKeys(target) { scans++; return Reflect.ownKeys(target); } });
+    const registries = { devices: hass.devices!, entities };
+    const first = synologyDevices(registries);
+    for (let i = 0; i < 100; i++) {
+      expect(synologyDevices(registries)).toBe(first);
+      expect(deviceEntity(hass, registries, "nas", "cpu_total_load")?.state).toBe("18");
+    }
+    expect(scans).toBe(1);
+  });
+  it("recognizes DSM devices through scoped entities when identifiers are omitted", async () => {
+    const hass = createFixture();
+    for (const device of Object.values(hass.devices!)) delete device.identifiers;
+    const registries = { devices: hass.devices!, entities: hass.entities! };
+    expect(synologyDevices(registries).map((device) => device.id)).toEqual(["nas", "nas2"]);
+    const card = await mount("synology-storage-card", {}, hass);
+    expect(card.shadowRoot!.textContent).toContain("1 Volumes");
+    expect(card.shadowRoot!.textContent).toContain("2 Drives");
+    expect(card.shadowRoot!.textContent).not.toContain("Other NAS");
   });
 });
 
@@ -253,6 +281,74 @@ describe("Cards", () => {
 });
 
 describe("Visual editor", () => {
+  it("does not restart discovery on state updates, and refresh reaches existing cards", async () => {
+    const fixture = createFixture();
+    const connection = {};
+    const callWS = vi.fn(async (message: Record<string, unknown>) =>
+      message.type === "config/device_registry/list" ? Object.values(fixture.devices!) : Object.values(fixture.entities!)
+    );
+    const hass = { ...fixture, connection, callWS } as HomeAssistant;
+    const load = vi.spyOn(discovery, "loadRegistries");
+    const card = await mount("synology-storage-card", {}, hass);
+    const editor = document.createElement("synology-storage-card-editor") as SynologyCardEditor;
+    editor.setConfig({ type: "custom:synology-storage-card" });
+    editor.hass = hass;
+    document.body.append(editor);
+    await editor.updateComplete;
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await editor.updateComplete;
+    expect(editor.shadowRoot!.querySelectorAll("option")).toHaveLength(3);
+    for (let i = 0; i < 30; i++) {
+      card.hass = { ...hass };
+      editor.hass = { ...hass };
+      await Promise.all([card.updateComplete, editor.updateComplete]);
+    }
+    expect(load).toHaveBeenCalledTimes(2);
+    expect(callWS).toHaveBeenCalledTimes(2);
+    const oldRegistries = card.registries;
+    editor.shadowRoot!.querySelector<HTMLButtonElement>("button")!.click();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    card.hass = { ...hass };
+    await card.updateComplete;
+    expect(callWS).toHaveBeenCalledTimes(4);
+    expect(card.registries).not.toBe(oldRegistries);
+    expect(card.registries).toBe(editor.registries);
+    load.mockRestore();
+  });
+  it("keeps a single discovery in flight while HA states change and populates the selector when it finishes", async () => {
+    const fixture = createFixture();
+    let finish!: () => void;
+    const pending = new Promise<void>((resolve) => { finish = resolve; });
+    const callWS = vi.fn(async (message: Record<string, unknown>) => {
+      await pending;
+      return message.type === "config/device_registry/list" ? Object.values(fixture.devices!) : Object.values(fixture.entities!);
+    });
+    const hass = { ...fixture, connection: {}, callWS } as HomeAssistant;
+    const load = vi.spyOn(discovery, "loadRegistries");
+    const editor = document.createElement("synology-storage-card-editor") as SynologyCardEditor;
+    editor.setConfig({ type: "custom:synology-storage-card" });
+    editor.hass = hass;
+    document.body.append(editor);
+    await editor.updateComplete;
+    for (let i = 0; i < 20; i++) {
+      editor.hass = { ...hass };
+      await editor.updateComplete;
+    }
+    expect(load).toHaveBeenCalledTimes(1);
+    expect(editor.shadowRoot!.querySelector<HTMLSelectElement>("select")!.disabled).toBe(true);
+    finish();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await editor.updateComplete;
+    const select = editor.shadowRoot!.querySelector<HTMLSelectElement>("select")!;
+    expect(select.disabled).toBe(false);
+    expect([...select.options].map((option) => option.value)).toEqual(["", "nas", "nas2"]);
+    select.value = "nas";
+    select.dispatchEvent(new Event("change"));
+    await editor.updateComplete;
+    expect(select.value).toBe("nas");
+    expect(load).toHaveBeenCalledTimes(1);
+    load.mockRestore();
+  });
   it("displays saved device and layout selections on its first render", async () => {
     const editor = document.createElement("synology-dashboard-card-editor") as SynologyCardEditor;
     editor.hass = createFixture();

@@ -1,7 +1,7 @@
 import { LitElement, css, html, nothing, type PropertyValues, type TemplateResult } from "lit";
 import { type CardConfig } from "./config";
 import { fireEvent, type HomeAssistant } from "./ha-types";
-import { loadRegistries, portainerEndpoints, synologyDevices, type Registries } from "./data";
+import { cachedRegistries, loadRegistries, portainerEndpoints, synologyDevices, type Registries } from "./data";
 
 export const mappingFields: Record<string, string> = {
   cpu_usage: "CPU utilization (%)", ram_usage: "Memory utilization (%)",
@@ -16,12 +16,13 @@ const tabNames: Record<string, string> = {
 
 export class SynologyCardEditor extends LitElement {
   static override properties = {
-    hass: { attribute: false }, _config: { state: true }, registries: { state: true }, error: { state: true },
+    hass: { attribute: false }, _config: { state: true }, registries: { state: true }, error: { state: true }, loading: { state: true },
   };
   declare hass?: HomeAssistant;
   declare _config?: CardConfig;
   declare registries: Registries;
   declare error: string;
+  declare loading: boolean;
   private registryKey?: object;
   private requestVersion = 0;
   static override styles = css`
@@ -38,23 +39,31 @@ export class SynologyCardEditor extends LitElement {
     super();
     this.registries = { devices: {}, entities: {} };
     this.error = "";
+    this.loading = false;
   }
   override willUpdate(changes: PropertyValues<this>): void {
     if (changes.has("hass") && this.hass) {
       const key = this.hass.connection ?? this.hass.callWS ?? this.hass;
       if (!this.hass.callWS) this.registries = { devices: this.hass.devices ?? {}, entities: this.hass.entities ?? {} };
-      else if (key !== this.registryKey || !this.error) { this.registryKey = key; void this.load(); }
+      else if (key !== this.registryKey) { this.registryKey = key; void this.load(); }
+      else {
+        const snapshot = cachedRegistries(this.hass);
+        if (snapshot) this.registries = snapshot;
+      }
     }
   }
   private async load(refresh = false): Promise<void> {
     if (!this.hass) return;
     const version = ++this.requestVersion;
     this.error = "";
+    this.loading = true;
     try {
       const result = await loadRegistries(this.hass, refresh);
       if (version === this.requestVersion) this.registries = result;
     } catch (error) {
       if (version === this.requestVersion) this.error = `Registry discovery failed: ${error instanceof Error ? error.message : String(error)}`;
+    } finally {
+      if (version === this.requestVersion) this.loading = false;
     }
   }
   setConfig(config: CardConfig): void { this._config = { ...config }; }
@@ -79,12 +88,13 @@ export class SynologyCardEditor extends LitElement {
     const fields = dashboard || config.type.includes("server") ? Object.entries(mappingFields) : [];
     return html`<div class="card-config">
       ${this.error ? html`<div role="alert">${this.error}</div>` : nothing}
-      <label>Synology NAS<select aria-label="Synology NAS" .value=${config.server || ""}
+      <label>Synology NAS<select aria-label="Synology NAS" ?disabled=${this.loading} .value=${config.server || ""}
         @change=${(event: Event) => this.changed("server", (event.target as HTMLSelectElement).value)}>
-        <option value="">${devices.length === 1 ? `Auto: ${devices[0]!.name}` : "Select a Synology DSM NAS"}</option>
+        <option value="">${this.loading ? "Loading Synology devices..." : devices.length === 1 ? `Auto: ${devices[0]!.name}` : "Select a Synology DSM NAS"}</option>
         ${devices.map((device) => html`<option value=${device.id} ?selected=${config.server === device.id}>${device.name_by_user || device.name}</option>`)}
         ${config.server && !devices.some((device) => device.id === config.server) ? html`<option value=${config.server} selected>Unavailable: ${config.server}</option>` : nothing}
       </select></label>
+      ${!this.loading && !this.error && !devices.length ? html`<p>No Synology DSM NAS found in the device/entity registries. Use Refresh entity discovery to retry.</p>` : nothing}
       ${docker ? html`<label>Synology Portainer endpoint<select aria-label="Synology Portainer endpoint" .value=${config.portainer_endpoint || ""}
         @change=${(event: Event) => this.changed("portainer_endpoint", (event.target as HTMLSelectElement).value)}>
         <option value="">Select explicitly (required for Docker)</option>
@@ -110,7 +120,7 @@ export class SynologyCardEditor extends LitElement {
           .value=${config.entities?.[key] || ""} .includeDomains=${[key === "security_status" ? "binary_sensor" : "sensor"]} .allowCustomEntity=${true}
           @value-changed=${(event: CustomEvent<{ value?: string }>) => this.mappingChanged(key, event.detail.value || "")}></ha-entity-picker></label>`)}
       </details>` : nothing}
-      <button @click=${() => this.load(true)}>Refresh entity discovery</button>
+      <button ?disabled=${this.loading} @click=${() => this.load(true)}>${this.loading ? "Loading device discovery..." : "Refresh entity discovery"}</button>
     </div>`;
   }
 }
