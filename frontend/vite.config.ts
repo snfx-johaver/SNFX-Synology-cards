@@ -17,7 +17,7 @@ function finalizeBundle() {
         if (file.type === "chunk" && file.code) {
           // Replace minified `[ \t\n\f\r]` with "[ \\t\\n\\f\\r]" to eliminate literal trailing whitespace
           file.code = file.code.replace(/`\[ \t\n\\f\\r\]`/g, '"[ \\t\\n\\f\\r]"');
-          file.code = `${licenseBanner}\n${file.code}`;
+          file.code = `${licenseBanner}\n${file.code}`.replace(/\r\n/g, "\n");
         }
       }
     },
