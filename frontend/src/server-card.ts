@@ -21,14 +21,14 @@ export function formatUptime(entity?: HassEntity): string {
 export class SynologyServerCard extends BaseSynologyCard {
   static override editorTag = SERVER_EDITOR_TAG;
 
-  private ring(label: string, value: number | undefined, subtext: string, entity?: HassEntity): TemplateResult {
+  private ring(label: string, value: number | undefined, subtext: string, entity?: HassEntity, decimals = 0): TemplateResult {
     return html`<div class="ring-card" role=${entity ? "button" : "none"} tabindex=${entity ? "0" : "-1"}
       @click=${() => entity && this.openMoreInfo(entity.entity_id)}
       @keydown=${(event: KeyboardEvent) => {
         if (entity && ["Enter", " "].includes(event.key)) { event.preventDefault(); this.openMoreInfo(entity.entity_id); }
       }}>
       <div class="ring-gauge" style="--pct: ${value ?? 0}; --ring-color: ${value === undefined ? "var(--synology-border)" : value > 85 ? "var(--synology-warning)" : "var(--synology-accent)"}">
-        <span class="ring-content">${value === undefined ? "--" : `${value}%`}</span>
+        <span class="ring-content">${value === undefined ? "--" : `${value.toFixed(decimals)}%`}</span>
       </div><span class="ring-label">${label}</span><span class="ring-subtext">${subtext}</span>
     </div>`;
   }
@@ -62,7 +62,7 @@ export class SynologyServerCard extends BaseSynologyCard {
       ${this.renderErrors()}
       ${!device ? this.renderNotice("Select your Synology DSM NAS in the card editor. No cross-server entity matching is performed.") : nothing}
       <div class="rings-grid">
-        ${this.ring("CPU Load", percentage(cpu), `System: ${formatValue(temperature)}`, cpu)}
+        ${this.ring("CPU Load", percentage(cpu, 2), `System: ${formatValue(temperature)}`, cpu, 2)}
         ${this.ring("Memory", percentage(ram), totalBytes !== undefined && freeBytes !== undefined ? `${formatBytes(Math.max(0, totalBytes - freeBytes))} / ${formatBytes(totalBytes)}` : "Enable total/free memory sensors for capacity", ram)}
         ${this.ring("Volume Storage", storagePct, storage.total !== undefined ? `${formatBytes(storage.used)} / ${formatBytes(storage.total)}` : "Enable every volume's total-size sensor", storageEntity)}
       </div>

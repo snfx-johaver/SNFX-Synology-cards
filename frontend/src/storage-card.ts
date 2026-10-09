@@ -36,7 +36,7 @@ export class SynologyStorageCard extends BaseSynologyCard {
             <button class="btn" ?disabled=${!volume.usage} @click=${() => volume.usage && this.openMoreInfo(volume.usage.entity_id)}>${iconTemplate(mdiHarddisk, 16)} ${volume.device.name_by_user || volume.device.name}</button>
             <span class="badge ${!usable(volume.status) ? "badge-standby" : normal ? "badge-online" : "badge-warning"}">${status}</span>
           </div>
-          <div style="display:flex;justify-content:space-between;font-size:.75rem"><span>${formatValue(volume.used)} / ${formatValue(volume.total)}</span><span>${pct === undefined ? "--" : `${pct}%`}</span></div>
+          <div style="display:flex;justify-content:space-between;font-size:.75rem"><span>${formatBytes(used)} / ${formatBytes(total)}</span><span>${pct === undefined ? "--" : `${pct}%`}</span></div>
           <div class="progress-bar"><div class="progress-fill" style="width:${pct ?? 0}%"></div></div>
           <div style="font-size:.72rem;color:var(--synology-subtext)">${total !== undefined && used !== undefined ? `${formatBytes(Math.max(0, total - used))} free • ` : ""}Average drive temperature: ${formatValue(volume.temperature)}</div>
         </div>`;

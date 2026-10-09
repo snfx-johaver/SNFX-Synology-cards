@@ -2,7 +2,7 @@ import { html, nothing, type PropertyValues, type TemplateResult } from "lit";
 import { DOCKER_CARD_TAG, DOCKER_EDITOR_TAG } from "./config";
 import { BaseSynologyCard } from "./dashboard-cards-base";
 import { SynologyDockerCardEditor } from "./dashboard-cards-editor";
-import { belongsTo, deviceEntity, formatValue, hasDomain, numeric, usable } from "./data";
+import { belongsTo, bytes, deviceEntity, formatBytes, formatValue, hasDomain, numeric, usable } from "./data";
 import { iconTemplate, mdiDocker, mdiPower, mdiRestart, mdiViewGrid, mdiViewList } from "./icons";
 import { registerDashboardCard } from "./register-dashboard-card";
 
@@ -50,6 +50,7 @@ export class SynologyDockerCard extends BaseSynologyCard {
       const restart = get("restart_container", "button") ?? get("restart", "button");
       const cpu = get("cpu_usage_total", "sensor");
       const memory = get("memory_usage", "sensor");
+      const memoryBytes = bytes(memory);
       const state = get("container_state", "sensor");
       const image = get("image", "sensor");
       list.push({
@@ -61,7 +62,7 @@ export class SynologyDockerCard extends BaseSynologyCard {
         // A button's unknown state means it has never been pressed, not that it is unavailable.
         restartEntityId: restart && restart.state !== "unavailable" ? restart.entity_id : undefined,
         cpuPct: cpu?.attributes.unit_of_measurement === "%" ? numeric(cpu) : undefined,
-        memoryUsage: usable(memory) ? formatValue(memory) : undefined,
+        memoryUsage: usable(memory) ? (memoryBytes !== undefined ? formatBytes(memoryBytes) : formatValue(memory)) : undefined,
       });
     }
     return list.sort((a, b) => Number(b.isRunning) - Number(a.isRunning) || a.name.localeCompare(b.name));
@@ -124,7 +125,7 @@ export class SynologyDockerCard extends BaseSynologyCard {
           <div class="row-left" style="flex-wrap:wrap;gap:8px">
             <span class="status-dot ${!container.available ? "unknown" : container.isRunning ? "online" : "offline"}"></span>
             <button class="btn" title=${container.image || container.name} @click=${() => this.openMoreInfo(container.switchEntityId)}>${container.name}</button>
-            ${container.cpuPct !== undefined ? html`<span style="font-size:.72rem;color:var(--synology-subtext)">${container.cpuPct}% CPU</span>` : nothing}
+            ${container.cpuPct !== undefined ? html`<span style="font-size:.72rem;color:var(--synology-subtext)">${container.cpuPct.toFixed(2)}% CPU</span>` : nothing}
             ${container.memoryUsage ? html`<span style="font-size:.72rem;color:var(--synology-subtext)">${container.memoryUsage}</span>` : nothing}
             ${this.status(container)}
           </div>${this.controls(container, false)}

@@ -40,6 +40,10 @@ Sections layout. You can change these in the card editor's **Layout** tab.
 Existing explicit `grid_options` or legacy `layout_options` take precedence;
 reset them to use the new defaults, or enable both switches manually.
 
+CPU percentages display two decimal places. RAM, container memory and storage
+sizes display GB (or TB for larger capacities), with at most two decimal places.
+Network speeds retain their automatic kB/s, MB/s or GB/s units.
+
 Select your **Synology NAS**. For Docker, explicitly select the **Synology
 Portainer endpoint**. The card never guesses which endpoint is Synology:
 containers must be Portainer container devices descending from that exact

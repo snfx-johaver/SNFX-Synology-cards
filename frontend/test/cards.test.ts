@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import "../src/index";
 import { BaseSynologyCard } from "../src/dashboard-cards-base";
 import { SynologyCardEditor } from "../src/dashboard-cards-editor";
-import { belongsTo, bytes, deviceEntity, formatRate, loadRegistries, safeUrl, storageSummary } from "../src/data";
+import { belongsTo, bytes, deviceEntity, formatBytes, formatRate, loadRegistries, percentage, safeUrl, storageSummary } from "../src/data";
 import { createFixture, state } from "./fixture";
 import type { CardConfig } from "../src/config";
 import type { HomeAssistant } from "../src/ha-types";
@@ -45,6 +45,15 @@ describe("Scoped discovery and values", () => {
     expect(formatRate(state("sensor.x", "unavailable", "kB/s"))).toBe("Unavailable");
     delete hass.states["sensor.volume_total"];
     expect(storageSummary(hass, { type: "", server: "nas" }, registries).percent).toBeUndefined();
+  });
+  it("rounds CPU precision and formats byte sizes as GB or TB with at most two decimals", () => {
+    expect(percentage(state("sensor.cpu", "18.126789", "%"), 2)).toBe(18.13);
+    expect(percentage(state("sensor.cpu", "unavailable", "%"), 2)).toBeUndefined();
+    expect(formatBytes(bytes(state("sensor.memory", "512", "MB")))).toBe("0.51 GB");
+    expect(formatBytes(bytes(state("sensor.memory", "512", "MiB")))).toBe("0.54 GB");
+    expect(formatBytes(bytes(state("sensor.memory", "8000", "MB")))).toBe("8 GB");
+    expect(formatBytes(1.234567e12)).toBe("1.23 TB");
+    expect(formatBytes(undefined)).toBe("Unavailable");
   });
   it("only allows HTTP(S) DSM links", () => {
     expect(safeUrl("javascript:alert(1)")).toBeUndefined();
@@ -90,7 +99,7 @@ describe("Cards", () => {
   it("renders real overview values, not healthy/zero fallbacks", async () => {
     const hass = createFixture();
     const card = await mount("synology-server-card", {}, hass);
-    expect(card.shadowRoot!.textContent).toContain("18%");
+    expect(card.shadowRoot!.textContent).toContain("18.00%");
     expect(card.shadowRoot!.textContent).toContain("25%");
     expect(card.shadowRoot!.textContent).not.toContain("99%");
     hass.states["sensor.renamed_cpu"] = state("sensor.renamed_cpu", "unavailable", "%");
@@ -103,10 +112,10 @@ describe("Cards", () => {
   it("does not select a NAS arbitrarily and invalid saved selections do not fall back", async () => {
     const card = await mount("synology-server-card", { server: "" });
     expect(card.shadowRoot!.textContent).toContain("Select your Synology");
-    expect(card.shadowRoot!.textContent).not.toContain("18%");
+    expect(card.shadowRoot!.textContent).not.toContain("18.00%");
     card.setConfig({ type: "custom:synology-server-card", server: "deleted" });
     await card.updateComplete;
-    expect(card.shadowRoot!.textContent).not.toContain("18%");
+    expect(card.shadowRoot!.textContent).not.toContain("18.00%");
   });
   it("renders SMART, temperature, volume and threshold states", async () => {
     const card = await mount("synology-storage-card");
@@ -157,6 +166,24 @@ describe("Cards", () => {
     card.shadowRoot!.querySelector<HTMLButtonElement>('[title="Stop Plex"]')!.click();
     expect(hass.callService).not.toHaveBeenCalled();
     vi.restoreAllMocks();
+  });
+  it("formats CPU and memory consistently across overview, storage and Docker cards", async () => {
+    const hass = createFixture();
+    hass.states["sensor.renamed_cpu"] = state("sensor.renamed_cpu", "18.126789", "%");
+    hass.states["sensor.ram_total"] = state("sensor.ram_total", "8000", "MB");
+    hass.states["sensor.ram_available"] = state("sensor.ram_available", "4000", "MB");
+    hass.states["sensor.plex_cpu"] = state("sensor.plex_cpu", "12.345678", "%");
+    hass.states["sensor.volume_total"] = state("sensor.volume_total", "8000", "MB");
+    hass.states["sensor.volume_used"] = state("sensor.volume_used", "1234.567", "MB");
+    const overview = await mount("synology-server-card", {}, hass);
+    expect(overview.shadowRoot!.textContent).toContain("18.13%");
+    expect(overview.shadowRoot!.textContent).toContain("4 GB / 8 GB");
+    const docker = await mount("synology-docker-card", { view_mode: "list" }, hass);
+    expect(docker.shadowRoot!.textContent).toContain("12.35% CPU");
+    expect(docker.shadowRoot!.textContent).toContain("0.54 GB");
+    expect(docker.shadowRoot!.textContent).not.toContain("MiB");
+    const storage = await mount("synology-storage-card", {}, hass);
+    expect(storage.shadowRoot!.textContent).toContain("1.23 GB / 8 GB");
   });
   it("never treats cumulative CPU time as CPU percentage", async () => {
     const hass = createFixture();

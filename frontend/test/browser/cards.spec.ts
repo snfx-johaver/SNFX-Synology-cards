@@ -24,7 +24,7 @@ test("desktop dashboard rings, tab switching and blue branding", async ({ page }
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
   await mount(page, "synology-dashboard-card");
-  await expect(page.getByText("18%", { exact: true })).toBeVisible();
+  await expect(page.getByText("18.00%", { exact: true })).toBeVisible();
   await expect(page.getByText("42%", { exact: true })).toBeVisible();
   await expect(page.getByText("Download", { exact: true })).toBeVisible();
   await expect(page.getByText("Upload", { exact: true })).toBeVisible();
@@ -48,7 +48,7 @@ test("desktop dashboard rings, tab switching and blue branding", async ({ page }
 test("mobile cards do not overflow and controls remain usable", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await mount(page, "synology-dashboard-card");
-  await expect(page.getByText("18%", { exact: true })).toBeVisible();
+  await expect(page.getByText("18.00%", { exact: true })).toBeVisible();
   await page.screenshot({ path: "test-results/synology-overview-mobile.png", fullPage: true });
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
   await page.getByRole("tab", { name: "Storage & Disks" }).click();
@@ -58,7 +58,7 @@ test("mobile cards do not overflow and controls remain usable", async ({ page })
   await page.getByRole("tab", { name: "Docker", exact: true }).click();
   await expect(page.getByTitle("Start Offline", { exact: true })).toBeDisabled();
   await page.getByTitle("Toggle View Mode").click();
-  await expect(page.getByText("12.5% CPU").first()).toBeVisible();
+  await expect(page.getByText("12.50% CPU").first()).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
 });
 

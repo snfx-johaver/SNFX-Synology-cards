@@ -92,9 +92,9 @@ export function numeric(entity?: HassEntity): number | undefined {
   return Number.isFinite(value) ? value : undefined;
 }
 
-export function percentage(entity?: HassEntity): number | undefined {
+export function percentage(entity?: HassEntity, decimals = 0): number | undefined {
   const value = numeric(entity);
-  return value === undefined ? undefined : Math.round(Math.max(0, Math.min(100, value)));
+  return value === undefined ? undefined : Number(Math.max(0, Math.min(100, value)).toFixed(decimals));
 }
 
 export function formatValue(entity?: HassEntity): string {
@@ -113,9 +113,9 @@ export function bytes(entity?: HassEntity): number | undefined {
   return value !== undefined && multiplier !== undefined ? value * multiplier : undefined;
 }
 
-export function formatBytes(value: number | undefined): string {
+export function formatBytes(value: number | undefined, minimumUnit: "B" | "GB" = "GB"): string {
   if (value === undefined || !Number.isFinite(value)) return "Unavailable";
-  const unit = value >= 1e12 ? "TB" : value >= 1e9 ? "GB" : value >= 1e6 ? "MB" : value >= 1e3 ? "kB" : "B";
+  const unit = value >= 1e12 ? "TB" : value >= 1e9 || minimumUnit === "GB" ? "GB" : value >= 1e6 ? "MB" : value >= 1e3 ? "kB" : "B";
   return `${(value / byteUnits[unit]!).toLocaleString(undefined, { maximumFractionDigits: 2 })} ${unit}`;
 }
 
@@ -126,7 +126,7 @@ export function formatRate(entity?: HassEntity): string {
   const base = unit.replace(/\/s$/, "");
   const multiplier = byteUnits[base];
   if (multiplier === undefined) return formatValue(entity);
-  return `${formatBytes(value * multiplier)}/s`;
+  return `${formatBytes(value * multiplier, "B")}/s`;
 }
 
 export function safeUrl(url: string | null | undefined): string | undefined {
