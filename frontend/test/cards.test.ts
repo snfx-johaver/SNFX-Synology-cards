@@ -164,13 +164,13 @@ describe("Cards", () => {
     await card.updateComplete;
     expect(card.shadowRoot!.querySelector("span")!.textContent).toBe("33");
   });
-  it("registers only the four supported cards and their visual editors", () => {
+  it("registers only the four supported cards and their visual editors", async () => {
     expect(window.customCards).toHaveLength(4);
     for (const entry of window.customCards!) {
       expect(entry.type.startsWith("synology-")).toBe(true);
       expect(customElements.get(`${entry.type}-editor`)).toBeDefined();
-      const ctor = customElements.get(entry.type) as CustomElementConstructor & { getStubConfig(): CardConfig };
-      expect(ctor.getStubConfig().type).toBe(`custom:${entry.type}`);
+      const ctor = customElements.get(entry.type) as CustomElementConstructor & { getStubConfig(): Promise<CardConfig> };
+      expect((await ctor.getStubConfig()).type).toBe(`custom:${entry.type}`);
     }
     expect(customElements.get("unraid-server-card")).toBeUndefined();
     expect(customElements.get("synology-ups-card")).toBeUndefined();
@@ -186,6 +186,21 @@ describe("Cards", () => {
       card.setConfig({ type: `custom:${entry.type}` });
       expect(card.getGridOptions()).toEqual({ columns: "full", rows: "auto", min_columns: 3 });
     }
+  });
+  it("saves only an unambiguous NAS in picker stubs, never guesses the Docker endpoint", async () => {
+    const ctor = customElements.get("synology-dashboard-card") as CustomElementConstructor & {
+      getStubConfig(hass: HomeAssistant): Promise<CardConfig>;
+    };
+    const hass = createFixture();
+    expect((await ctor.getStubConfig(hass)).server).toBeUndefined();
+    delete hass.devices!.nas2;
+    const single = { ...hass, devices: { ...hass.devices! } };
+    const config = await ctor.getStubConfig(single);
+    expect(config).toEqual({ type: "custom:synology-dashboard-card", server: "nas" });
+    const card = await mount("synology-dashboard-card", config, single);
+    const child = card.shadowRoot!.querySelector("synology-server-card") as BaseSynologyCard;
+    await child.updateComplete;
+    expect(child.shadowRoot!.textContent).toContain("18.00%");
   });
   it("renders real overview values, not healthy/zero fallbacks", async () => {
     const hass = createFixture();

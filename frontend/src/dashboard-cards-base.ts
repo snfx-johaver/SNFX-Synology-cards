@@ -2,7 +2,7 @@ import { LitElement, html, nothing, type PropertyValues, type TemplateResult } f
 import { type CardConfig } from "./config";
 import { dashboardCardStyles } from "./dashboard-cards-styles";
 import { fireEvent, type HassEntity, type HomeAssistant } from "./ha-types";
-import { belongsTo, cachedRegistries, deviceEntity, loadRegistries, selectedDevice, type Registries } from "./data";
+import { belongsTo, cachedRegistries, deviceEntity, loadRegistries, selectedDevice, synologyDevices, type Registries } from "./data";
 import { iconTemplate } from "./icons";
 
 const entityKeys: Record<string, string> = {
@@ -17,8 +17,13 @@ export abstract class BaseSynologyCard extends LitElement {
   static async getConfigElement(this: { editorTag: string }): Promise<HTMLElement> {
     return document.createElement(this.editorTag);
   }
-  static getStubConfig(this: { editorTag: string }): CardConfig {
-    return { type: `custom:${this.editorTag.replace(/-editor$/, "")}` };
+  static async getStubConfig(this: { editorTag: string }, hass?: HomeAssistant): Promise<CardConfig> {
+    const config: CardConfig = { type: `custom:${this.editorTag.replace(/-editor$/, "")}` };
+    if (hass) {
+      const devices = synologyDevices(await loadRegistries(hass));
+      if (devices.length === 1) config.server = devices[0]!.id;
+    }
+    return config;
   }
   static override properties = {
     hass: { attribute: false }, config: { attribute: false },
