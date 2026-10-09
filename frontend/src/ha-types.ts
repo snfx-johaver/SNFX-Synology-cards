@@ -18,6 +18,7 @@ export interface DeviceRegistryEntry {
   sw_version?: string | null;
   hw_version?: string | null;
   via_device_id?: string | null;
+  parent_device_id?: string | null;
   configuration_url?: string | null;
 }
 

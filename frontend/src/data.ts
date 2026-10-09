@@ -32,7 +32,8 @@ export function belongsTo(device: DeviceRegistryEntry | undefined, parentId: str
   while (device && !visited.has(device.id)) {
     if (device.id === parentId) return true;
     visited.add(device.id);
-    device = device.via_device_id ? devices[device.via_device_id] : undefined;
+    const ancestorId = device.parent_device_id ?? device.via_device_id;
+    device = ancestorId ? devices[ancestorId] : undefined;
   }
   return false;
 }
@@ -42,9 +43,16 @@ export function hasDomain(device: DeviceRegistryEntry, domain: string): boolean 
 }
 
 export function synologyDevices(registries: Registries): DeviceRegistryEntry[] {
-  return Object.values(registries.devices).filter((device) =>
-    hasDomain(device, "synology_dsm") && !device.via_device_id
-  );
+  return Object.values(registries.devices).filter((device) => {
+    if (!hasDomain(device, "synology_dsm")) return false;
+    const entities = Object.values(registries.entities).filter((entity) =>
+      entity.device_id === device.id && entity.platform === "synology_dsm"
+    );
+    // The NAS can itself be attached to another device; system sensors identify it.
+    if (entities.some((entity) => ["cpu_total_load", "memory_real_usage", "uptime"].some((key) => entityMatches(entity, key)))) return true;
+    return !device.parent_device_id && !device.via_device_id &&
+      !entities.some((entity) => ["volume_percentage_used", "volume_status", "disk_status"].some((key) => entityMatches(entity, key)));
+  });
 }
 
 export function portainerEndpoints(registries: Registries): DeviceRegistryEntry[] {

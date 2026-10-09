@@ -98,3 +98,41 @@ test("visual editor preserves selections and entity overrides", async ({ page })
   expect(JSON.parse(config!)).toMatchObject({ server: "nas", portainer_endpoint: "synEndpoint", view_mode: "list" });
   expect(JSON.parse(config!).tabs).toEqual(["overview", "docker"]);
 });
+
+test("storage editor lists linked NAS devices and selection loads only their storage", async ({ page }) => {
+  await mount(page, "synology-storage-card", { server: "" });
+  await page.evaluate(() => {
+    const card = document.querySelector("synology-storage-card") as BaseSynologyCard;
+    const fixture = card.hass!;
+    fixture.devices!.nas!.via_device_id = "unraid";
+    for (const id of ["volume", "disk", "disk2"]) {
+      fixture.devices![id]!.parent_device_id = "nas";
+      delete fixture.devices![id]!.via_device_id;
+    }
+    const hass: HomeAssistant = {
+      ...fixture, connection: {},
+      callWS: async <T,>(message: Record<string, unknown>) =>
+        (message.type === "config/device_registry/list"
+          ? Object.values(fixture.devices!) : Object.values(fixture.entities!)) as T,
+    };
+    card.hass = hass;
+    const editor = document.createElement("synology-storage-card-editor") as HTMLElement & {
+      hass?: HomeAssistant; setConfig(config: CardConfig): void;
+    };
+    editor.hass = hass;
+    editor.setConfig({ type: "custom:synology-storage-card" });
+    editor.addEventListener("config-changed", (event) => {
+      const config = (event as CustomEvent<{ config: CardConfig }>).detail.config;
+      card.setConfig(config);
+      editor.setConfig(config);
+    });
+    document.querySelector("#cards")!.prepend(editor);
+  });
+  await page.getByLabel("Synology NAS", { exact: true }).selectOption("nas");
+  await expect(page.getByLabel("Synology NAS", { exact: true })).toHaveValue("nas");
+  await expect(page.getByText("SMART: normal")).toHaveCount(2);
+  await expect(page.getByText("Unavailable fields / setup notes")).toHaveCount(0);
+  await page.getByLabel("Synology NAS", { exact: true }).selectOption("nas2");
+  await expect(page.getByText("SMART: normal")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Other NAS (Volume 1)", exact: true })).toBeVisible();
+});

@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import "../src/index";
 import { BaseSynologyCard } from "../src/dashboard-cards-base";
 import { SynologyCardEditor } from "../src/dashboard-cards-editor";
-import { belongsTo, bytes, deviceEntity, formatBytes, formatRate, loadRegistries, percentage, safeUrl, storageSummary } from "../src/data";
+import { belongsTo, bytes, deviceEntity, formatBytes, formatRate, loadRegistries, percentage, safeUrl, storageSummary, synologyDevices } from "../src/data";
 import { createFixture, state } from "./fixture";
 import type { CardConfig } from "../src/config";
 import type { HomeAssistant } from "../src/ha-types";
@@ -32,6 +32,27 @@ describe("Scoped discovery and values", () => {
     expect(belongsTo(devices.unraidPlex, "synEndpoint", devices)).toBe(false);
     devices.stack!.via_device_id = "plex";
     expect(belongsTo(devices.plex, "synEndpoint", devices)).toBe(false);
+  });
+  it("discovers a linked NAS and storage using parent-device relationships", async () => {
+    const hass = createFixture();
+    hass.devices!.nas!.via_device_id = "unraid";
+    for (const id of ["volume", "disk", "disk2"]) {
+      const device = hass.devices![id]!;
+      delete device.via_device_id;
+      device.parent_device_id = "nas";
+      delete device.model;
+    }
+    const registries = { devices: hass.devices!, entities: hass.entities! };
+    expect(synologyDevices(registries).map((device) => device.id)).toEqual(["nas", "nas2"]);
+    expect(belongsTo(hass.devices!.disk, "nas", hass.devices!)).toBe(true);
+    expect(belongsTo(hass.devices!.volume2, "nas", hass.devices!)).toBe(false);
+    const card = await mount("synology-storage-card", {}, hass);
+    expect(card.shadowRoot!.textContent).toContain("1 Volumes");
+    expect(card.shadowRoot!.textContent).toContain("2 Drives");
+    expect(card.shadowRoot!.textContent).toContain("SMART: normal");
+    expect(card.shadowRoot!.textContent).not.toContain("Other NAS");
+    hass.devices!.nas!.parent_device_id = "disk";
+    expect(belongsTo(hass.devices!.disk, "nas2", hass.devices!)).toBe(false);
   });
   it("normalizes units, weights volumes, and rejects partial aggregates", () => {
     const hass = createFixture();
@@ -124,6 +145,8 @@ describe("Cards", () => {
     expect(text).toContain("34 °C");
     expect(text).toContain("Not exceeded");
     expect(text).not.toContain("Other NAS");
+    expect(text).not.toContain("Unavailable fields");
+    expect(card.shadowRoot!.querySelector("details")).toBeNull();
   });
   it("does not mistake unavailable disk status for healthy", async () => {
     const hass = createFixture();
@@ -136,6 +159,8 @@ describe("Cards", () => {
     expect(card.shadowRoot!.textContent).toContain("Plex");
     expect(card.shadowRoot!.textContent).not.toContain("Unraid Plex");
     expect(card.shadowRoot!.textContent).toContain("1 unavailable");
+    expect(card.shadowRoot!.textContent).not.toContain("Unavailable fields");
+    expect(card.shadowRoot!.querySelector("details")).toBeNull();
     expect(card.shadowRoot!.querySelector<HTMLButtonElement>('[title="Start Offline"]')!.disabled).toBe(true);
     card.setConfig({ type: "custom:synology-docker-card", server: "nas" });
     await card.updateComplete;

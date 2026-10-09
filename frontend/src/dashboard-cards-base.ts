@@ -107,9 +107,6 @@ export abstract class BaseSynologyCard extends LitElement {
   protected renderNotice(message: string): TemplateResult {
     return html`<div class="empty-state">${message}</div>`;
   }
-  protected renderCapability(message: string): TemplateResult {
-    return html`<details class="capability-note"><summary>Unavailable fields / setup notes</summary><div>${message}</div></details>`;
-  }
   protected renderErrors(): TemplateResult {
     return html`${this.registryError ? html`<div role="alert" class="empty-state">${this.registryError} <button class="btn" @click=${() => this.refreshRegistries(true)}>Retry</button></div>` : nothing}
       ${this.actionError ? html`<div role="alert" class="empty-state">${this.actionError}</div>` : nothing}`;

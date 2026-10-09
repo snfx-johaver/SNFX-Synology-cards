@@ -39,19 +39,11 @@ export const dashboardCardStyles = [
       flex-shrink: 0;
     }
 
-    .empty-state, .capability-note {
+    .empty-state {
       font-size: 0.76rem;
       line-height: 1.5;
       color: var(--synology-subtext);
       overflow-wrap: anywhere;
-    }
-
-    .capability-note summary {
-      cursor: pointer;
-    }
-
-    .capability-note div {
-      margin-top: 8px;
     }
 
     .section-title {

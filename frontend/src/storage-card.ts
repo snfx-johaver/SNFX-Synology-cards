@@ -73,7 +73,6 @@ export class SynologyStorageCard extends BaseSynologyCard {
         </div>`;
       })}</div>
       ${!volumes.length && !disks.length ? this.renderNotice("No DSM volumes or drives found for the selected NAS. Enable its storage entities, then refresh discovery.") : nothing}
-      ${this.renderCapability("DSM does not expose scrub/rebuild progress, drive capacity usage, read/write I/O or spin controls as Home Assistant entities. Enable disabled SMART and volume total-size sensors to fill those supported fields.")}
     </ha-card>`;
   }
 }

@@ -61,8 +61,11 @@ pick up the refreshed registry on the next HA state update; reload the browser
 if no update arrives. After enabling disabled entities, allow the integration
 to poll before expecting values.
 
-The NAS is auto-selected only when exactly one root Synology DSM device exists.
+The NAS is auto-selected only when exactly one Synology DSM NAS device exists.
 Saved selections that no longer exist do not fall back to another NAS.
+NAS discovery recognizes DSM system sensors even when the NAS is linked to
+another device. Storage traversal supports both `via_device_id` and
+`parent_device_id` relationships.
 Discovery uses full HA registry metadata so renamed entities work; if older
 metadata omits stable keys, a suffix fallback is still restricted to the selected
 device and integration.
@@ -113,8 +116,8 @@ are placeholders, not entities that the DSM integration creates.
 ## Entity coverage and gaps compared with Unraid
 
 Missing readings show **Unavailable** or `--`, never a made-up zero or healthy
-status. Contextual **Unavailable fields / setup notes** disclosures explain
-limitations without crowding the layout. Error and warning colors remain
+status. Unsupported-feature explanations stay in this documentation, not on
+the cards. Error and warning colors remain
 semantic red/orange; brand accents, selected tabs and progress bars are blue.
 
 | Unraid card item | Synology/default-integration equivalent or limitation |

@@ -131,7 +131,6 @@ export class SynologyDockerCard extends BaseSynologyCard {
           </div>${this.controls(container, false)}
         </div>`)}
       </div>`}
-      ${this.renderCapability("Default Portainer exposes no autostart toggle or image-update-available/check-updates entity. Restart is supported. CPU is shown only when the integration reports a percentage, never when it reports cumulative CPU time.")}
     </ha-card>`;
   }
 }
