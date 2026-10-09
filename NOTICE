@@ -1,0 +1,14 @@
+SNFX Synology Cards
+
+Frontend cards adapted from Home Assistant Integration for Unraid
+https://github.com/ruaan-deysel/ha-unraid
+Upstream revision: c816d9fd113df51c66ffde050a8dba52c799b2e1
+Licensed under the Apache License, Version 2.0; see LICENSE.
+
+Modifications: Synology blue branding and custom-element namespaces;
+default Synology DSM entity discovery and volume/SMART presentation;
+default Portainer endpoint-scoped discovery and entity-based controls;
+visual editors, missing-capability messages, standalone HACS packaging
+and Synology-specific tests.
+
+This project is not affiliated with Synology, Unraid, or Portainer.
