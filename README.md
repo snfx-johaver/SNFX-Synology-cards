@@ -1,34 +1,73 @@
 # SNFX Synology Cards
 
-Standalone Home Assistant dashboard cards with the layout and styling of
+Home Assistant integration with bundled dashboard cards using the layout and styling of
 [ruaan-deysel/ha-unraid](https://github.com/ruaan-deysel/ha-unraid), adapted for
-**Synology blue**, the **built-in Synology DSM integration**, and the **built-in
-Portainer integration**. No custom backend, credentials, NAS API calls or
-Synology Pro dependency. The browser consumes Home Assistant states and calls
-existing entity actions only.
+**Synology blue**, the **built-in Synology DSM integration**, and optional
+**built-in Portainer integration**. The backend supplies a setup/options flow and
+loads the selected frontend bundle; it does not collect NAS data or ask for
+credentials. No NAS API calls or Synology Pro dependency. The browser consumes
+Home Assistant states and calls existing entity actions only.
 
 ## Install
 
 ### HACS
 
-Once these files are published to this repository's default branch or a release:
-
 1. In HACS, open **Custom repositories**.
-2. Add `https://github.com/snfx-johaver/SNFX-Synology-cards` as **Dashboard**
-   (not Integration).
-3. Download **SNFX Synology Cards**, then reload your browser.
-4. Check **Settings -> Dashboards -> Resources**. HACS should register
-   `/hacsfiles/SNFX-Synology-cards/synology-cards.js` as a **JavaScript module**.
-   Add it manually if necessary. Resources are visible in advanced mode.
+2. Add `https://github.com/snfx-johaver/SNFX-Synology-cards` as **Integration**
+   (not Dashboard).
+3. Download **SNFX Synology Cards**, then restart Home Assistant.
+4. In **Settings -> Devices & services -> Add integration**, select
+   **SNFX Synology Cards**.
+5. Choose whether you have the built-in Portainer integration configured.
+   The form links to its official documentation. Without it, leave Docker off.
+6. Reload your browser, then add the Synology cards to your dashboard.
 
-HACS downloads the ready-built `dist/synology-cards.js`; users do not need Node
-or a build tool. The filename is explicitly configured in `hacs.json`.
+The integration automatically serves and loads its bundled module. No dashboard
+resource entry, Node.js or build tool is required. Requires Home Assistant 2025.12
+or later.
+
+### Migrating from v1.x (Dashboard package)
+
+Version 2 changes the HACS category. Back up your dashboard configuration first.
+Remove the old SNFX Synology Cards Dashboard package from HACS, remove its custom
+repository entry, then re-add the same repository under **Integration** and
+follow the setup steps above.
+
+Remove old `/hacsfiles/SNFX-Synology-cards/synology-cards.js` or
+`/local/synology-cards.js` entries from **Settings -> Dashboards -> Resources**.
+Do not load an old bundle alongside the integration: custom elements cannot be
+replaced in an already-open page. Hard-refresh every open Home Assistant browser
+tab after migration. Existing card types, NAS IDs, mappings and layout settings
+remain compatible; keep Docker enabled if your dashboards use Docker cards.
 
 ### Manual
 
-Copy `dist/synology-cards.js` to your HA configuration's `www` directory.
-Add `/local/synology-cards.js` as a **JavaScript module** dashboard resource and
-reload your browser. Do not load both the manual and HACS copies.
+Copy the entire `custom_components/synology_cards` directory into your Home
+Assistant `custom_components` directory, restart, and add **SNFX Synology Cards**
+in Devices & services. Both prebuilt bundles are included.
+
+The legacy full bundle in `dist/synology-cards.js` is retained for manual
+cards-only use, but has no integration setup flow. Do not load it alongside the
+backend integration.
+
+## Optional Portainer
+
+The integration setup asks whether the built-in
+[Portainer integration](https://www.home-assistant.io/integrations/portainer/)
+is configured. Enabling Docker requires a Portainer config entry; selecting its
+Synology endpoint remains an explicit choice in each card.
+
+When Docker is off, Home Assistant loads the DSM-only bundle: the card picker
+contains only Overview, Storage & Disks, and Unified Dashboard. No Docker card or
+editor is registered, the dashboard has no Docker tab, and endpoint/container
+layout/Docker visibility options are absent. No Docker controls run.
+
+Change this later using **Settings -> Devices & services -> SNFX Synology Cards
+-> Configure**. Reload the browser after saving so custom-element registrations
+match the selected bundle. Existing standalone Docker cards are not deleted from
+your dashboard automatically; remove them before disabling Docker. Both bundle
+files are distributed so the option can be changed without reinstalling, but
+only the selected bundle is loaded.
 
 ## Configure in the UI
 
@@ -44,7 +83,7 @@ CPU percentages display two decimal places. RAM, container memory and storage
 sizes display GB (or TB for larger capacities), with at most two decimal places.
 Network speeds retain their automatic kB/s, MB/s or GB/s units.
 
-Select your **Synology NAS**. For Docker, explicitly select the **Synology
+Select your **Synology NAS**. With Docker enabled, explicitly select the **Synology
 Portainer endpoint**. The card never guesses which endpoint is Synology:
 containers must be Portainer container devices descending from that exact
 endpoint, including containers nested under stacks. It does not search by
@@ -83,7 +122,7 @@ device and integration.
 | `custom:synology-docker-card` | Synology Portainer containers, grid/list, start/stop/restart |
 Shared-folder, virtual-machine and UPS cards are intentionally omitted because
 the selected integrations do not provide their required entities.
-No additional integration is installed by these cards.
+The card integration does not install or configure DSM or Portainer for you.
 There is no separate network card: aggregate download/upload rates and the DSM
 management link are items on the primary Server Overview card.
 
@@ -180,11 +219,20 @@ npx playwright install chromium
 npm run test:browser
 ```
 
-Commit `dist/synology-cards.js` with source changes. It is a single bundled ES
+For backend tests, use Python 3.13 on Linux:
+
+```text
+pip install -r requirements_test.txt
+pytest -q
+```
+
+Commit both `custom_components/synology_cards/www` bundles and the legacy
+`dist/synology-cards.js` with source changes. Each is a single bundled ES
 module: Lit and icons are included, with no runtime CDN dependency. CI checks
 types, unit tests, deterministic build output and Chromium desktop/mobile
 rendering. Fixtures include two NAS devices, two Portainer endpoints, nested
-stacks, renamed entities and unavailable sensors/containers.
+stacks, renamed entities and unavailable sensors/containers. Backend tests use
+real Home Assistant config/options flows and check selective module loading.
 
 Development/browser fixtures validate the adapter against documented integration
 schemas; they do not establish a connection to your real Home Assistant or NAS.

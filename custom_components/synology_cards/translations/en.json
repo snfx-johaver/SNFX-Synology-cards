@@ -1,0 +1,34 @@
+{
+  "title": "SNFX Synology Cards",
+  "config": {
+    "step": {
+      "user": {
+        "title": "Set up Synology cards",
+        "description": "Cards use your existing [Synology DSM integration](https://www.home-assistant.io/integrations/synology_dsm/).\n\nEnable Docker cards only if you have configured the built-in [Portainer integration](https://www.home-assistant.io/integrations/portainer/). Leave this off to load only NAS overview, storage and a dashboard without Docker tabs or settings.\n\nSelect the Synology Portainer endpoint in the card editor after setup. Reload your browser after setup or changing this option.",
+        "data": {
+          "use_portainer": "I have the Portainer integration configured (enable Docker cards)"
+        }
+      }
+    },
+    "error": {
+      "portainer_not_configured": "Configure the built-in Portainer integration first, or disable Docker cards to continue."
+    },
+    "abort": {
+      "single_instance_allowed": "SNFX Synology Cards is already configured. Use its options to change Docker support."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Optional Docker support",
+        "description": "Enable Docker cards only when the built-in [Portainer integration](https://www.home-assistant.io/integrations/portainer/) is configured. When disabled, the Docker card, dashboard tab, endpoint selector and container settings are not loaded.\n\nReload your browser after saving. Existing standalone Docker cards must be removed from dashboards if you disable support; they are not deleted automatically.",
+        "data": {
+          "use_portainer": "I have the Portainer integration configured (enable Docker cards)"
+        }
+      }
+    },
+    "error": {
+      "portainer_not_configured": "Configure the built-in Portainer integration first, or disable Docker cards to continue."
+    }
+  }
+}

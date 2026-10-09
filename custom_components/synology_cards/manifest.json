@@ -1,0 +1,12 @@
+{
+  "domain": "synology_cards",
+  "name": "SNFX Synology Cards",
+  "codeowners": ["@snfx-johaver"],
+  "config_flow": true,
+  "dependencies": ["frontend"],
+  "documentation": "https://github.com/snfx-johaver/SNFX-Synology-cards",
+  "integration_type": "service",
+  "issue_tracker": "https://github.com/snfx-johaver/SNFX-Synology-cards/issues",
+  "requirements": [],
+  "version": "2.0.0"
+}

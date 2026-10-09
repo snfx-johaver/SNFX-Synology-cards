@@ -134,7 +134,9 @@ export class SynologyDockerCard extends BaseSynologyCard {
     </ha-card>`;
   }
 }
-registerDashboardCard({
-  tag: DOCKER_CARD_TAG, editorTag: DOCKER_EDITOR_TAG, card: SynologyDockerCard, editor: SynologyDockerCardEditor,
-  name: "Synology Docker Containers Card", description: "Synology endpoint-scoped Portainer containers with start, stop and restart controls.",
-});
+export function registerDockerCard(): void {
+  registerDashboardCard({
+    tag: DOCKER_CARD_TAG, editorTag: DOCKER_EDITOR_TAG, card: SynologyDockerCard, editor: SynologyDockerCardEditor,
+    name: "Synology Docker Containers Card", description: "Synology endpoint-scoped Portainer containers with start, stop and restart controls.",
+  });
+}

@@ -2,6 +2,7 @@ import { LitElement, css, html, nothing, type PropertyValues, type TemplateResul
 import { type CardConfig } from "./config";
 import { fireEvent, type HomeAssistant } from "./ha-types";
 import { cachedRegistries, loadRegistries, portainerEndpoints, synologyDevices, type Registries } from "./data";
+import { PORTAINER_ENABLED } from "./features";
 
 export const mappingFields: Record<string, string> = {
   cpu_usage: "CPU utilization (%)", ram_usage: "Memory utilization (%)",
@@ -82,9 +83,10 @@ export class SynologyCardEditor extends LitElement {
     if (!this._config) return html``;
     const config = this._config;
     const devices = synologyDevices(this.registries);
-    const endpoints = portainerEndpoints(this.registries);
+    const endpoints = PORTAINER_ENABLED ? portainerEndpoints(this.registries) : [];
     const dashboard = config.type.includes("dashboard");
-    const docker = dashboard || config.type.includes("docker");
+    const docker = PORTAINER_ENABLED && (dashboard || config.type.includes("docker"));
+    const availableTabs = Object.entries(tabNames).filter(([key]) => PORTAINER_ENABLED || key !== "docker");
     const fields = dashboard || config.type.includes("server") ? Object.entries(mappingFields) : [];
     return html`<div class="card-config">
       ${this.error ? html`<div role="alert">${this.error}</div>` : nothing}
@@ -107,11 +109,11 @@ export class SynologyCardEditor extends LitElement {
       ${dashboard || config.type.includes("server") ? html`<label class="checkbox-row"><input type="checkbox" .checked=${config.show_system_info !== false}
         @change=${(event: Event) => this.changed("show_system_info", (event.target as HTMLInputElement).checked)}>Show system details</label>` : nothing}
       ${dashboard ? html`<details><summary>Visible dashboard tabs</summary>
-        ${Object.entries(tabNames).map(([key, name]) => html`<label class="checkbox-row"><input type="checkbox" .checked=${(config.tabs ?? Object.keys(tabNames)).includes(key)}
+        ${availableTabs.map(([key, name]) => html`<label class="checkbox-row"><input type="checkbox" .checked=${(config.tabs ?? availableTabs.map(([key]) => key)).includes(key)}
           @change=${(event: Event) => {
-            const selected = new Set(config.tabs ?? Object.keys(tabNames));
+            const selected = new Set(config.tabs ?? availableTabs.map(([key]) => key));
             if ((event.target as HTMLInputElement).checked) selected.add(key); else selected.delete(key);
-            this.changed("tabs", Object.keys(tabNames).filter((tab) => selected.has(tab)));
+            this.changed("tabs", availableTabs.map(([key]) => key).filter((tab) => selected.has(tab)));
           }}>${name}</label>`)}
       </details>` : nothing}
       ${fields.length ? html`<details><summary>Entity mappings (optional)</summary>

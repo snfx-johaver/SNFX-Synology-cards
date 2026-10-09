@@ -1,5 +1,4 @@
 {
   "name": "SNFX Synology Cards",
-  "filename": "synology-cards.js",
-  "content_in_root": false
+  "homeassistant": "2025.12.0"
 }

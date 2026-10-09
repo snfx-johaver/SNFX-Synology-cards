@@ -1,11 +1,11 @@
 {
   "name": "synology-dashboard-cards",
   "private": true,
-  "version": "1.0.4",
+  "version": "2.0.0",
   "type": "module",
   "description": "Custom Lovelace dashboard cards for Synology Home Assistant integration",
   "scripts": {
-    "build": "vite build",
+    "build": "node scripts/build.mjs",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:browser": "node test/browser/run.mjs"

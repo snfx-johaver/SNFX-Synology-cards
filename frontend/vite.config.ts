@@ -24,19 +24,20 @@ function finalizeBundle() {
   };
 }
 
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
+  define: { __PORTAINER_ENABLED__: mode !== "dsm" },
   plugins: [finalizeBundle()],
   build: {
     modulePreload: false,
-    outDir: "../dist",
-    emptyOutDir: true,
+    outDir: "../custom_components/synology_cards/www",
+    emptyOutDir: mode !== "dsm",
     target: "es2022",
     minify: true,
     sourcemap: false,
     reportCompressedSize: false,
     rollupOptions: {
       input: {
-        "synology-cards": "src/index.ts",
+        [mode === "dsm" ? "synology-cards-dsm" : "synology-cards"]: mode === "dsm" ? "src/index-dsm.ts" : "src/index.ts",
       },
       output: {
         format: "es",
@@ -57,4 +58,4 @@ export default defineConfig({
       reporter: ["text-summary"],
     },
   },
-});
+}));

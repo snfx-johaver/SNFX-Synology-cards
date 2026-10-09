@@ -21,11 +21,13 @@ const contentTypes = new Map([
 const server = createServer((request, response) => {
   const pathname = new URL(request.url ?? "/", "http://127.0.0.1").pathname;
   const file =
-    pathname === "/synology-cards.js"
+    pathname === "/synology-cards-dsm.js"
+      ? resolve(root, "../custom_components/synology_cards/www/synology-cards-dsm.js")
+      : pathname === "/synology-cards.js"
       ? bundlePath
       : resolve(root, `.${pathname}`);
 
-  const allowedRoots = [root, dirname(bundlePath)];
+  const allowedRoots = [root, dirname(bundlePath), resolve(root, "../custom_components/synology_cards/www")];
   if (!allowedRoots.some((allowed) => file.startsWith(`${allowed}${sep}`))) {
     response.writeHead(403).end();
     return;
