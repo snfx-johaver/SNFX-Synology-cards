@@ -90,6 +90,7 @@ test("visual editor preserves selections and entity overrides", async ({ page })
     document.querySelector("#cards")!.replaceChildren(editor);
   });
   await page.getByLabel("Synology NAS", { exact: true }).selectOption("nas");
+  await page.getByLabel("Container source", { exact: true }).selectOption("portainer");
   await page.getByLabel("Synology Portainer endpoint", { exact: true }).selectOption("synEndpoint");
   await page.getByLabel("Container layout", { exact: true }).selectOption("list");
   await page.getByText("Visible dashboard tabs", { exact: true }).click();

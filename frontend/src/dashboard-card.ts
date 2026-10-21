@@ -1,10 +1,9 @@
 import { html, nothing, type TemplateResult } from "lit";
-import { DASHBOARD_CARD_TAG, DASHBOARD_EDITOR_TAG } from "./config";
+import { containerSource, DASHBOARD_CARD_TAG, DASHBOARD_EDITOR_TAG } from "./config";
 import { BaseSynologyCard } from "./dashboard-cards-base";
 import { SynologyDashboardCardEditor } from "./dashboard-cards-editor";
 import { iconTemplate, mdiDocker, mdiHarddisk, mdiServer } from "./icons";
 import { registerDashboardCard } from "./register-dashboard-card";
-import { PORTAINER_ENABLED } from "./features";
 import "./server-card";
 import "./storage-card";
 
@@ -21,7 +20,7 @@ export class SynologyDashboardCard extends BaseSynologyCard {
   constructor() { super(); this._activeTab = "overview"; }
   protected override render(): TemplateResult {
     const device = this.getActiveDevice();
-    const visible = tabs.filter((tab) => (PORTAINER_ENABLED || tab.key !== "docker") && (!this.config.tabs || this.config.tabs.includes(tab.key)));
+    const visible = tabs.filter((tab) => (containerSource(this.config) !== "disabled" || tab.key !== "docker") && (!this.config.tabs || this.config.tabs.includes(tab.key)));
     const active = visible.some((tab) => tab.key === this._activeTab) ? this._activeTab : visible[0]?.key;
     const child = (type: string) => ({ ...this.config, title: undefined, type: `custom:synology-${type}-card`, embedded: true });
     return html`<ha-card style="gap:12px">
@@ -41,5 +40,5 @@ export class SynologyDashboardCard extends BaseSynologyCard {
 }
 registerDashboardCard({
   tag: DASHBOARD_CARD_TAG, editorTag: DASHBOARD_EDITOR_TAG, card: SynologyDashboardCard, editor: SynologyDashboardCardEditor,
-  name: "Synology Unified Dashboard Card", description: "Tabbed Synology DSM and endpoint-scoped Portainer dashboard.",
+  name: "Synology Unified Dashboard Card", description: "Synology DSM dashboard with optional Portainer or manually mapped container entities.",
 });

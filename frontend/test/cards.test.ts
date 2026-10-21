@@ -440,7 +440,7 @@ describe("Visual editor", () => {
   it("saves endpoint, layout, tab visibility and mappings as config-changed", async () => {
     const editor = document.createElement("synology-dashboard-card-editor") as SynologyCardEditor;
     editor.hass = createFixture();
-    editor.setConfig({ type: "custom:synology-dashboard-card" });
+    editor.setConfig({ type: "custom:synology-dashboard-card", container_source: "portainer" });
     document.body.append(editor);
     await editor.updateComplete;
     const listener = vi.fn();
@@ -462,5 +462,157 @@ describe("Visual editor", () => {
     storageCheckbox.checked = false;
     storageCheckbox.dispatchEvent(new Event("change"));
     expect(listener.mock.lastCall![0].detail.config.tabs).toEqual(["overview", "docker"]);
+  });
+
+  describe("Per-card container sources", () => {
+    it("defaults new dashboards to disabled, preserves legacy endpoints, and allows explicit opt-out", async () => {
+      const card = await mount("synology-dashboard-card", { portainer_endpoint: undefined });
+      expect(card.shadowRoot!.querySelectorAll('[role="tab"]')).toHaveLength(2);
+      card.setConfig({ type: "custom:synology-dashboard-card", portainer_endpoint: "synEndpoint" });
+      await card.updateComplete;
+      expect(card.shadowRoot!.querySelectorAll('[role="tab"]')).toHaveLength(3);
+      card.setConfig({ type: "custom:synology-dashboard-card", portainer_endpoint: "synEndpoint", container_source: "disabled" });
+      await card.updateComplete;
+      expect(card.shadowRoot!.querySelectorAll('[role="tab"]')).toHaveLength(2);
+      const standalone = await mount("synology-docker-card", { container_source: "disabled" });
+      expect(standalone.shadowRoot!.querySelectorAll(".container-tile")).toHaveLength(0);
+      expect(standalone.shadowRoot!.textContent).toContain("Container support is disabled");
+    });
+    it("renders manual containers without Portainer, hides unmapped data and uses exact status states", async () => {
+      const hass = createFixture();
+      hass.states["sensor.custom_status"] = { ...state("sensor.custom_status", "running"), attributes: { friendly_name: "Custom container" } };
+      hass.states["sensor.custom_cpu"] = state("sensor.custom_cpu", "123.4567", "%");
+      hass.states["sensor.custom_memory"] = state("sensor.custom_memory", "512", "MiB");
+      const config: Partial<CardConfig> = {
+        container_source: "manual", view_mode: "list",
+        containers: [{ status_entity: "sensor.custom_status", cpu_entity: "sensor.custom_cpu", memory_entity: "sensor.custom_memory" }],
+      };
+      const card = await mount("synology-docker-card", config, hass);
+      expect(card.shadowRoot!.textContent).toContain("Custom container");
+      expect(card.shadowRoot!.textContent).toContain("123.46% CPU");
+      expect(card.shadowRoot!.textContent).toContain("0.54 GB");
+      expect(card.shadowRoot!.textContent).not.toContain("Plex");
+      expect(card.shadowRoot!.querySelector('[title="Start Custom container"]')).toBeNull();
+      expect(card.shadowRoot!.querySelector('[title="Restart Custom container"]')).toBeNull();
+      hass.states["sensor.custom_status"] = state("sensor.custom_status", "paused");
+      card.hass = { ...hass };
+      await card.updateComplete;
+      expect(card.shadowRoot!.textContent).toContain("paused");
+      expect(card.shadowRoot!.textContent).toContain("0 stopped");
+      card.setConfig({ type: "custom:synology-docker-card", container_source: "manual", containers: [{ status_entity: "sensor.custom_status" }] });
+      await card.updateComplete;
+      expect(card.shadowRoot!.textContent).not.toContain("% CPU");
+      expect(card.shadowRoot!.textContent).not.toContain("0.54 GB");
+    });
+    it("uses explicit manual controls, confirms stop and reports action failures", async () => {
+      const hass = createFixture();
+      hass.states["sensor.custom"] = state("sensor.custom", "stopped");
+      hass.states["button.start"] = state("button.start", "unknown");
+      hass.states["script.stop"] = state("script.stop", "off");
+      hass.states["input_button.restart"] = state("input_button.restart", "unknown");
+      hass.callService = vi.fn().mockResolvedValue(undefined);
+      const card = await mount("synology-docker-card", {
+        container_source: "manual",
+        containers: [{
+          name: "Custom", status_entity: "sensor.custom", stopped_state: "stopped",
+          start_entity: "button.start", stop_entity: "script.stop", restart_entity: "input_button.restart",
+        }],
+      }, hass);
+      card.shadowRoot!.querySelector<HTMLButtonElement>('[title="Start Custom"]')!.click();
+      expect(hass.callService).toHaveBeenCalledWith("button", "press", { entity_id: "button.start" });
+      card.shadowRoot!.querySelector<HTMLButtonElement>('[title="Restart Custom"]')!.click();
+      expect(hass.callService).toHaveBeenCalledWith("input_button", "press", { entity_id: "input_button.restart" });
+      hass.states["sensor.custom"] = state("sensor.custom", "running");
+      card.hass = { ...hass };
+      await card.updateComplete;
+      const confirmation = vi.spyOn(window, "confirm").mockReturnValue(false);
+      vi.mocked(hass.callService).mockClear();
+      card.shadowRoot!.querySelector<HTMLButtonElement>('[title="Stop Custom"]')!.click();
+      expect(hass.callService).not.toHaveBeenCalled();
+      confirmation.mockReturnValue(true);
+      card.shadowRoot!.querySelector<HTMLButtonElement>('[title="Stop Custom"]')!.click();
+      expect(hass.callService).toHaveBeenCalledWith("script", "turn_on", { entity_id: "script.stop" });
+      hass.callService = vi.fn().mockRejectedValue(new Error("Manual action denied"));
+      card.hass = { ...hass };
+      await card.updateComplete;
+      card.shadowRoot!.querySelector<HTMLButtonElement>('[title="Restart Custom"]')!.click();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      await card.updateComplete;
+      expect(card.shadowRoot!.querySelector('[role="alert"]')!.textContent).toContain("Manual action denied");
+      confirmation.mockRestore();
+    });
+    it("does not enable controls for unavailable, unknown or transitional status or unavailable action entities", async () => {
+      const hass = createFixture();
+      hass.states["sensor.custom"] = state("sensor.custom", "running");
+      hass.states["button.dead"] = state("button.dead", "unavailable");
+      const card = await mount("synology-docker-card", {
+        container_source: "manual", containers: [{
+          name: "Custom", status_entity: "sensor.custom", power_entity: "switch.plex", restart_entity: "button.dead",
+        }],
+      }, hass);
+      expect(card.shadowRoot!.querySelector<HTMLButtonElement>('[title="Restart Custom"]')!.disabled).toBe(true);
+      for (const status of ["unavailable", "unknown", "paused"]) {
+        hass.states["sensor.custom"] = state("sensor.custom", status);
+        card.hass = { ...hass };
+        await card.updateComplete;
+        expect(card.shadowRoot!.querySelector<HTMLButtonElement>('[title="Start Custom"]')!.disabled).toBe(true);
+      }
+    });
+    it("updates manual status, metrics and controls on embedded dashboards without unrelated redraws", async () => {
+      const hass = createFixture();
+      hass.states["sensor.custom"] = state("sensor.custom", "running");
+      hass.states["sensor.custom_cpu"] = state("sensor.custom_cpu", "15", "%");
+      const card = await mount("synology-dashboard-card", {
+        container_source: "manual", tabs: ["docker"], view_mode: "list",
+        containers: [{ status_entity: "sensor.custom", cpu_entity: "sensor.custom_cpu", power_entity: "switch.plex" }],
+      }, hass);
+      const child = card.shadowRoot!.querySelector("synology-docker-card") as BaseSynologyCard;
+      await child.updateComplete;
+      expect(child.shadowRoot!.textContent).toContain("15.00% CPU");
+      hass.states["sensor.custom_cpu"] = state("sensor.custom_cpu", "25.555", "%");
+      card.hass = { ...hass };
+      await card.updateComplete;
+      await child.updateComplete;
+      expect(child.shadowRoot!.textContent).toContain("25.55% CPU");
+      hass.states["switch.plex"] = state("switch.plex", "unavailable");
+      card.hass = { ...hass };
+      await card.updateComplete;
+      await child.updateComplete;
+      expect(child.shadowRoot!.querySelector<HTMLButtonElement>('[title="Stop sensor.custom"]')!.disabled).toBe(true);
+    });
+    it("rejects invalid sources, malformed containers and unsupported control domains", () => {
+      const card = document.createElement("synology-docker-card") as BaseSynologyCard;
+      expect(() => card.setConfig({ type: "custom:synology-docker-card", container_source: "invalid" } as unknown as CardConfig)).toThrow("Container source");
+      expect(() => card.setConfig({ type: "custom:synology-docker-card", containers: [null] } as unknown as CardConfig)).toThrow("status entity");
+      expect(() => card.setConfig({ type: "custom:synology-docker-card", containers: [{ status_entity: "sensor.x", restart_entity: "lock.front_door" }] })).toThrow("Unsupported entity");
+      expect(() => card.setConfig({ type: "custom:synology-docker-card", containers: [{ status_entity: "sensor.x", running_state: "running", stopped_state: "running" }] })).toThrow("must be different");
+    });
+    it("edits sources and manual mappings with entity pickers without erasing saved endpoints", async () => {
+      const editor = document.createElement("synology-dashboard-card-editor") as SynologyCardEditor;
+      editor.hass = createFixture();
+      editor.setConfig({ type: "custom:synology-dashboard-card", portainer_endpoint: "synEndpoint" });
+      document.body.append(editor);
+      await editor.updateComplete;
+      const source = editor.shadowRoot!.querySelector<HTMLSelectElement>('[aria-label="Container source"]')!;
+      expect(source.value).toBe("portainer");
+      source.value = "manual";
+      source.dispatchEvent(new Event("change"));
+      await editor.updateComplete;
+      expect(editor.shadowRoot!.querySelector('[aria-label="Synology Portainer endpoint"]')).toBeNull();
+      const add = [...editor.shadowRoot!.querySelectorAll("button")].find((button) => button.textContent === "Add container")!;
+      add.click();
+      await editor.updateComplete;
+      const picker = editor.shadowRoot!.querySelector("fieldset ha-entity-picker")!;
+      picker.dispatchEvent(new CustomEvent("value-changed", { detail: { value: "sensor.custom_status" } }));
+      await editor.updateComplete;
+      expect(editor._config!.containers).toEqual([{ status_entity: "sensor.custom_status" }]);
+      source.value = "disabled";
+      source.dispatchEvent(new Event("change"));
+      await editor.updateComplete;
+      expect(editor.shadowRoot!.querySelector("fieldset")).toBeNull();
+      expect(editor.shadowRoot!.querySelector('[aria-label="Container layout"]')).toBeNull();
+      expect(editor._config!.portainer_endpoint).toBe("synEndpoint");
+      expect(editor._config!.containers![0]!.status_entity).toBe("sensor.custom_status");
+    });
   });
 });

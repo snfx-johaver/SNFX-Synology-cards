@@ -1,5 +1,5 @@
 import { LitElement, html, nothing, type PropertyValues, type TemplateResult } from "lit";
-import { type CardConfig } from "./config";
+import { containerSource, containerStates, type CardConfig } from "./config";
 import { dashboardCardStyles } from "./dashboard-cards-styles";
 import { fireEvent, type HassEntity, type HomeAssistant } from "./ha-types";
 import { belongsTo, cachedRegistries, deviceEntity, loadRegistries, selectedDevice, synologyDevices, type Registries } from "./data";
@@ -65,8 +65,16 @@ export abstract class BaseSynologyCard extends LitElement {
     if (this.watchedConfig !== this.config || this.watchedRegistries !== this.registries) {
       const server = this.getActiveDevice()?.id;
       const docker = this.config.type.includes("docker") || this.config.type.includes("dashboard");
-      const endpoint = docker ? this.config.portainer_endpoint : undefined;
+      const source = docker ? containerSource(this.config) : "disabled";
+      const endpoint = source === "portainer" ? this.config.portainer_endpoint : undefined;
       const ids = new Set(Object.values(this.config.entities ?? {}));
+      if (source === "manual") {
+        for (const container of this.config.containers ?? []) {
+          for (const [key, value] of Object.entries(container)) {
+            if (key.endsWith("_entity") && value) ids.add(value);
+          }
+        }
+      }
       for (const entity of Object.values(this.registries.entities)) {
         const device = entity.device_id ? this.registries.devices[entity.device_id] : undefined;
         if ((server && entity.platform === "synology_dsm" && belongsTo(device, server, this.registries.devices)) ||
@@ -118,6 +126,33 @@ export abstract class BaseSynologyCard extends LitElement {
     if (config.server !== undefined && typeof config.server !== "string") throw new Error("Select a Synology device registry ID");
     if (config.portainer_endpoint !== undefined && typeof config.portainer_endpoint !== "string") throw new Error("Select a Portainer endpoint device registry ID");
     if (config.view_mode !== undefined && !["grid", "list"].includes(config.view_mode)) throw new Error("Container layout must be grid or list");
+    if (config.container_source !== undefined && !["disabled", "portainer", "manual"].includes(config.container_source)) {
+      throw new Error("Container source must be disabled, portainer or manual");
+    }
+    if (config.containers !== undefined) {
+      if (!Array.isArray(config.containers)) throw new Error("Manual containers must be a list");
+      const domains: Record<string, string[]> = {
+        status_entity: ["sensor", "binary_sensor", "switch", "input_boolean"],
+        cpu_entity: ["sensor"], memory_entity: ["sensor"], power_entity: ["switch"],
+        start_entity: ["button", "input_button", "script"], stop_entity: ["button", "input_button", "script"],
+        restart_entity: ["button", "input_button", "script"],
+      };
+      for (const container of config.containers) {
+        if (!container || typeof container !== "object" || typeof container.status_entity !== "string") {
+          throw new Error("Each manual container needs a status entity");
+        }
+        for (const [key, value] of Object.entries(container)) {
+          if (typeof value !== "string") throw new Error(`Container ${key} must be a string`);
+          if (value && domains[key] && (!/^[a-z_]+\.[a-z0-9_]+$/.test(value) || !domains[key]!.includes(value.split(".")[0]!))) {
+            throw new Error(`Unsupported entity for container ${key}: ${value}`);
+          }
+        }
+        const states = containerStates(container);
+        if (states.running === states.stopped) {
+          throw new Error("Running and stopped states must be different");
+        }
+      }
+    }
     if (config.entities && Object.values(config.entities).some((id) => typeof id !== "string")) {
       throw new Error("Entity mappings must contain entity ID strings");
     }
@@ -140,7 +175,7 @@ export abstract class BaseSynologyCard extends LitElement {
     this.actionError = "";
     if (!this.hass) { this.actionError = "Home Assistant is not connected."; return; }
     const state = this.hass.states[entityId];
-    if (!state || state.state === "unavailable" || (domain !== "button" && state.state === "unknown")) {
+    if (!state || state.state === "unavailable" || (!["button", "input_button", "script"].includes(domain) && state.state === "unknown")) {
       this.actionError = `Cannot ${service}: ${entityId} is unavailable.`;
       return;
     }
