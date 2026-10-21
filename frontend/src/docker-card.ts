@@ -157,7 +157,7 @@ export class SynologyDockerCard extends BaseSynologyCard {
       ${this.renderErrors()}
       ${source === "disabled" ? this.renderNotice("Container support is disabled. Choose a container source in the card editor.")
         : source === "manual" ? (!containers.length ? this.renderNotice("Add containers and select their status entities in the card editor.") : nothing)
-        : !this.config.portainer_endpoint ? this.renderNotice("Select the Portainer endpoint belonging to your Synology NAS in the card editor. No endpoint is selected automatically.")
+        : !this.config.portainer_endpoint ? this.renderNotice("Select the Portainer endpoint belonging to your NAS in the card editor. No endpoint is selected automatically.")
         : !containers.length ? this.renderNotice("No container switches found under the selected Portainer endpoint. Check the endpoint selection and enable its container switch entities.") : nothing}
       ${source === "manual" && this.config.containers?.some((container) => !container.status_entity) ? this.renderNotice("A manual container is missing its required status entity. Complete its mapping in the card editor.") : nothing}
       ${source !== "disabled" ? html`
@@ -197,6 +197,6 @@ export class SynologyDockerCard extends BaseSynologyCard {
 export function registerDockerCard(): void {
   registerDashboardCard({
     tag: DOCKER_CARD_TAG, editorTag: DOCKER_EDITOR_TAG, card: SynologyDockerCard, editor: SynologyDockerCardEditor,
-    name: "Synology Docker Containers Card", description: "Portainer discovery or manually mapped container entities with optional controls.",
+    name: "NAS Docker Containers Card", description: "Portainer discovery or manually mapped container entities with optional controls.",
   });
 }

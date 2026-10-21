@@ -91,7 +91,7 @@ test("visual editor preserves selections and entity overrides", async ({ page })
   });
   await page.getByLabel("Synology NAS", { exact: true }).selectOption("nas");
   await page.getByLabel("Container source", { exact: true }).selectOption("portainer");
-  await page.getByLabel("Synology Portainer endpoint", { exact: true }).selectOption("synEndpoint");
+  await page.getByLabel("Portainer endpoint", { exact: true }).selectOption("synEndpoint");
   await page.getByLabel("Container layout", { exact: true }).selectOption("list");
   await page.getByText("Visible dashboard tabs", { exact: true }).click();
   await page.getByLabel("Storage & Disks", { exact: true }).uncheck();
@@ -183,7 +183,7 @@ test("editor selections and live readings survive sustained unrelated HA updates
   });
   expect(elapsed).toBeLessThan(500);
   await expect(page.getByLabel("Synology NAS", { exact: true })).toHaveValue("nas");
-  await expect(page.getByLabel("Synology Portainer endpoint", { exact: true })).toHaveValue("synEndpoint");
+  await expect(page.getByLabel("Portainer endpoint", { exact: true })).toHaveValue("synEndpoint");
   await expect(page.getByText("24.75%", { exact: true })).toBeVisible();
   await page.getByRole("tab", { name: "Docker", exact: true }).click();
   await expect(page.getByText("Plex", { exact: true })).toBeVisible();

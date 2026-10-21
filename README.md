@@ -2,7 +2,7 @@
 
 Frontend-only Home Assistant dashboard cards using the layout and styling of
 [ruaan-deysel/ha-unraid](https://github.com/ruaan-deysel/ha-unraid), adapted for
-**Synology blue**, the **built-in Synology DSM integration**, and optional
+**Synology blue**, **Synology DSM, QNAP or manually mapped NAS entities**, and optional
 **Portainer discovery or manually mapped container entities**. No backend integration,
 setup flow, credentials, NAS API calls or Synology Pro dependency. The browser consumes
 Home Assistant states and calls existing entity actions only.
@@ -17,7 +17,7 @@ Home Assistant states and calls existing entity actions only.
 4. Check **Settings -> Dashboards -> Resources** (advanced mode): there should be
    one JavaScript module resource at
    `/hacsfiles/SNFX-Synology-cards/synology-cards.js`. Add it if HACS has not.
-5. Add the Synology cards to your dashboard. Choose optional container support
+5. Add the NAS cards to your dashboard. Choose your NAS system and optional container support
    directly in each card's visual editor.
 
 No Home Assistant restart or Devices & services entry is needed. Requires Home
@@ -48,8 +48,73 @@ Version 1.x was already a Dashboard package; update it normally.
 ### Manual
 
 Copy `dist/synology-cards.js` to `config/www/synology-cards.js`, then register
-`/local/synology-cards.js?v=3.0.0` as a JavaScript module in Dashboard Resources.
+`/local/synology-cards.js?v=3.1.0` as a JavaScript module in Dashboard Resources.
 Reload your browser. No backend files are needed.
+
+## NAS system selection
+
+In the **visual card editor**, choose **NAS system** on the Overview, Storage & Disks,
+or Unified Dashboard card. No YAML or backend setup is required.
+
+| NAS system | How to configure |
+| --- | --- |
+| Synology DSM | Select a NAS from the built-in [Synology DSM integration](https://www.home-assistant.io/integrations/synology_dsm/); discover its overview, volumes and drives automatically |
+| QNAP | Select a NAS from the built-in [QNAP integration](https://www.home-assistant.io/integrations/qnap/); discover its overview, volumes, drives and network interfaces |
+| Manual entities | Use entity pickers for overview readings and add volume/drive mappings from any HA integration; no device registry entry required |
+
+Existing cards without `nas_source` keep Synology DSM behavior, device selections
+and explicit overrides. The existing `synology-...` card type IDs and resource
+filename are retained for compatibility; the picker now uses NAS-neutral display names.
+Changing **NAS system** clears NAS/device, overview/storage mappings, manual name,
+management URL and interface selection so the previous NAS cannot be shown as the
+new one. It preserves container configuration, custom title, tabs and layout.
+Changing the selected NAS within one system keeps explicit overrides; review them
+to ensure they still refer to the intended NAS.
+
+### QNAP discovery
+
+QNAP places its volume, drive and per-interface sensors on the same NAS device,
+unlike DSM's child devices. The adapter groups them by the integration's stable
+unique IDs, not entity names. Discovery follows the
+[Home Assistant 2026.10.2 QNAP sensor schema](https://github.com/home-assistant/core/blob/2026.10.2/homeassistant/components/qnap/sensor.py).
+For older/different integrations without this metadata, use Manual entities.
+
+Optional QNAP total/free memory, volume capacities, uptime, drive SMART/temperature
+and traffic sensors may be disabled by default. Enable the ones you want in
+Devices & services. With more than one NIC/bond, choose **Network interface** in
+the card editor; traffic is never summed or selected arbitrarily.
+QNAP's current selected rate units (including Mbit/s) are respected.
+
+QNAP system status is shown exactly as reported, not as Synology Security Advisor.
+The built-in QNAP integration does not expose DSM-style volume status, average
+volume temperature or drive bad-sector/remaining-life threshold binary sensors;
+those fields are omitted, not fabricated.
+Automatic discovery is tested against source-based fixtures, not a live QNAP NAS.
+
+### Manual NAS mappings
+
+Choose **Manual entities**, optionally give the NAS a name and HTTP(S) management
+URL, then use the **Overview entity mappings**, **Manual volumes**, and **Manual
+drives** sections. The standalone Overview card can also map volumes for its storage ring.
+All readings are optional; unmapped fields stay hidden. Mapped but unavailable
+readings never become a healthy status or zero. Manual mode makes no device/entity
+registry requests unless automatic Portainer discovery is also enabled.
+
+CPU/RAM/storage utilization must be percentages. Capacity sensors must report byte
+units (B, kB, MB, GB, TB or binary equivalents); uptime accepts a boot timestamp
+or a duration in s, min, h or d. Model, firmware and system status use sensor
+entities; system status is displayed as reported, without inferring health from
+an arbitrary string. Drive threshold mappings require binary sensors where `on`
+means a problem.
+Manual RAM utilization can be derived from mapped total and used/free capacities
+when no explicit utilization entity is mapped; an unavailable explicit mapping
+is never replaced with a derived percentage.
+
+Storage aggregates require used and total sizes for **every** configured volume,
+weighted by capacity. Missing capacity data is not estimated from percentages.
+An individual volume percentage can be computed from its used/total readings
+when no percentage entity is mapped. Container source remains independent of
+NAS system, so manual NAS metrics can still use automatic Portainer containers.
 
 ## Optional containers
 
@@ -58,7 +123,7 @@ The Unified Dashboard and standalone Docker card editors have a **Container sour
 | Source | Configuration |
 | --- | --- |
 | Disabled | Hides the Docker tab, endpoint, container mappings and layout options; sends no container actions |
-| Portainer | Select the Synology endpoint for automatic, endpoint-scoped discovery |
+| Portainer | Select the intended NAS endpoint for automatic, endpoint-scoped discovery |
 | Manual entities | Add one mapping per container from any integration exposing suitable HA entities |
 
 All four cards are always available in the card picker. Nothing installs a
@@ -89,7 +154,7 @@ service errors are visible. Only map actions belonging to the intended container
 
 ## Configure in the UI
 
-Add a card and search for **Synology Unified Dashboard Card**, or any of the
+Add a card and search for **NAS Unified Dashboard Card**, or any of the
 individual cards below. Every card has a visual editor.
 
 All four cards default to **Full width** and **Auto height** in Home Assistant's
@@ -101,8 +166,8 @@ CPU percentages display two decimal places. RAM, container memory and storage
 sizes display GB (or TB for larger capacities), with at most two decimal places.
 Network speeds retain their automatic kB/s, MB/s or GB/s units.
 
-Select your **Synology NAS**. In Portainer mode, explicitly select the **Synology
-Portainer endpoint**. The card never guesses which endpoint is Synology:
+Select your **NAS system** and its NAS device, or use manual mappings.
+In Portainer mode, explicitly select the **Portainer endpoint**. The card never guesses which endpoint belongs to your NAS:
 containers must be Portainer container devices descending from that exact
 endpoint, including containers nested under stacks. It does not search by
 container name or entity prefix and does not include Unraid integration entities,
@@ -118,7 +183,9 @@ pick up the refreshed registry on the next HA state update; reload the browser
 if no update arrives. After enabling disabled entities, allow the integration
 to poll before expecting values.
 
-The NAS is auto-selected only when exactly one Synology DSM NAS device exists.
+Within the selected NAS system, a NAS is auto-selected only when exactly one candidate exists.
+The card picker's initial configuration saves a device/source only if exactly
+one system device exists across Synology DSM and QNAP.
 Saved selections that no longer exist do not fall back to another NAS.
 Only devices with DSM CPU, RAM or system sensors appear in the NAS selector;
 non-system DSM records, storage devices and empty orphaned records are excluded.
@@ -140,19 +207,20 @@ device and integration.
 | Type | Purpose |
 | --- | --- |
 | `custom:synology-dashboard-card` | Unified tabbed Control Center |
-| `custom:synology-server-card` | CPU/RAM/storage rings, model, DSM, uptime, security, traffic |
+| `custom:synology-server-card` | CPU/RAM/storage rings, model, firmware, uptime, source-specific status and traffic |
 | `custom:synology-storage-card` | Volumes and physical drives, SMART, temperatures, threshold alerts |
 | `custom:synology-docker-card` | Portainer or manual containers, grid/list, optional start/stop/restart |
 Shared-folder, virtual-machine and UPS cards are intentionally omitted because
 the selected integrations do not provide their required entities.
-The Dashboard package does not install or configure DSM or container integrations for you.
-There is no separate network card: aggregate download/upload rates and the DSM
+The Dashboard package does not install or configure DSM, QNAP or container integrations for you.
+There is no separate network card: download/upload rates and the NAS
 management link are items on the primary Server Overview card.
 
 ### YAML alternative
 
 ```yaml
 type: custom:synology-dashboard-card
+nas_source: synology_dsm
 server: YOUR_SYNOLOGY_DEVICE_REGISTRY_ID
 container_source: portainer
 portainer_endpoint: YOUR_SYNOLOGY_PORTAINER_ENDPOINT_DEVICE_ID
@@ -166,6 +234,26 @@ tabs:
 
 The visual editor supplies device registry IDs; these are **not** entity IDs,
 IP addresses or Portainer's numeric endpoint IDs.
+
+Manual NAS example (all mappings are available in the UI editor):
+
+```yaml
+type: custom:synology-dashboard-card
+nas_source: manual
+name: My NAS
+entities:
+  cpu_usage: sensor.my_nas_cpu_utilization
+  ram_usage: sensor.my_nas_memory_utilization
+  system_status: sensor.my_nas_status
+volumes:
+  - name: Data
+    total_entity: sensor.my_volume_capacity
+    used_entity: sensor.my_volume_used
+drives:
+  - name: Drive 1
+    smart_entity: sensor.my_drive_smart_status
+    temperature_entity: sensor.my_drive_temperature
+```
 
 Manual container example (only status is required):
 
@@ -198,10 +286,12 @@ are placeholders, not entities that the DSM integration creates.
 
 ## Entity coverage and gaps compared with Unraid
 
-Missing readings show **Unavailable** or `--`, never a made-up zero or healthy
+Mapped/unavailable readings show **Unavailable** or `--`, never a made-up zero or healthy
 status. Unsupported-feature explanations stay in this documentation, not on
 the cards. Error and warning colors remain
 semantic red/orange; brand accents, selected tabs and progress bars are blue.
+The table below describes the Synology DSM adapter; QNAP/manual differences are
+documented above.
 
 | Unraid card item | Synology/default-integration equivalent or limitation |
 | --- | --- |

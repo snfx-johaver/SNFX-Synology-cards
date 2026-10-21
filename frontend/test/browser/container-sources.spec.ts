@@ -23,10 +23,10 @@ test("source selection hides Docker per card and preserves legacy Portainer sett
   await expect(page.getByLabel("Container source", { exact: true })).toHaveValue("portainer");
   await page.getByLabel("Container source", { exact: true }).selectOption("disabled");
   await expect(page.getByRole("tab", { name: "Docker", exact: true })).toHaveCount(0);
-  await expect(page.getByLabel("Synology Portainer endpoint", { exact: true })).toHaveCount(0);
+  await expect(page.getByLabel("Portainer endpoint", { exact: true })).toHaveCount(0);
   await expect(page.getByLabel("Container layout", { exact: true })).toHaveCount(0);
   await page.getByLabel("Container source", { exact: true }).selectOption("portainer");
-  await expect(page.getByLabel("Synology Portainer endpoint", { exact: true })).toHaveValue("synEndpoint");
+  await expect(page.getByLabel("Portainer endpoint", { exact: true })).toHaveValue("synEndpoint");
   await page.getByRole("tab", { name: "Docker", exact: true }).click();
   await expect(page.getByText("Plex", { exact: true })).toBeVisible();
   await expect(page.getByText("Unraid Plex", { exact: true })).toHaveCount(0);

@@ -357,7 +357,7 @@ describe("Visual editor", () => {
     }
     expect(editor.renders).toBe(initial);
     expect(editor.shadowRoot!.querySelector<HTMLSelectElement>('[aria-label="Synology NAS"]')!.value).toBe("nas");
-    expect(editor.shadowRoot!.querySelector<HTMLSelectElement>('[aria-label="Synology Portainer endpoint"]')!.value).toBe("synEndpoint");
+    expect(editor.shadowRoot!.querySelector<HTMLSelectElement>('[aria-label="Portainer endpoint"]')!.value).toBe("synEndpoint");
   });
   it("does not restart discovery on state updates, and refresh reaches existing cards", async () => {
     const fixture = createFixture();
@@ -375,7 +375,7 @@ describe("Visual editor", () => {
     await editor.updateComplete;
     await new Promise((resolve) => setTimeout(resolve, 0));
     await editor.updateComplete;
-    expect(editor.shadowRoot!.querySelectorAll("option")).toHaveLength(3);
+    expect(editor.shadowRoot!.querySelectorAll('[aria-label="Synology NAS"] option')).toHaveLength(3);
     for (let i = 0; i < 30; i++) {
       card.hass = { ...hass };
       editor.hass = { ...hass };
@@ -413,11 +413,11 @@ describe("Visual editor", () => {
       await editor.updateComplete;
     }
     expect(load).toHaveBeenCalledTimes(1);
-    expect(editor.shadowRoot!.querySelector<HTMLSelectElement>("select")!.disabled).toBe(true);
+    expect(editor.shadowRoot!.querySelector<HTMLSelectElement>('[aria-label="Synology NAS"]')!.disabled).toBe(true);
     finish();
     await new Promise((resolve) => setTimeout(resolve, 0));
     await editor.updateComplete;
-    const select = editor.shadowRoot!.querySelector<HTMLSelectElement>("select")!;
+    const select = editor.shadowRoot!.querySelector<HTMLSelectElement>('[aria-label="Synology NAS"]')!;
     expect(select.disabled).toBe(false);
     expect([...select.options].map((option) => option.value)).toEqual(["", "nas", "nas2"]);
     select.value = "nas";
@@ -434,7 +434,7 @@ describe("Visual editor", () => {
     document.body.append(editor);
     await editor.updateComplete;
     expect(editor.shadowRoot!.querySelector<HTMLSelectElement>('[aria-label="Synology NAS"]')!.value).toBe("nas2");
-    expect(editor.shadowRoot!.querySelector<HTMLSelectElement>('[aria-label="Synology Portainer endpoint"]')!.value).toBe("synEndpoint");
+    expect(editor.shadowRoot!.querySelector<HTMLSelectElement>('[aria-label="Portainer endpoint"]')!.value).toBe("synEndpoint");
     expect(editor.shadowRoot!.querySelector<HTMLSelectElement>('[aria-label="Container layout"]')!.value).toBe("list");
   });
   it("saves endpoint, layout, tab visibility and mappings as config-changed", async () => {
@@ -445,7 +445,7 @@ describe("Visual editor", () => {
     await editor.updateComplete;
     const listener = vi.fn();
     editor.addEventListener("config-changed", listener);
-    const select = editor.shadowRoot!.querySelector<HTMLSelectElement>('[aria-label="Synology Portainer endpoint"]')!;
+    const select = editor.shadowRoot!.querySelector<HTMLSelectElement>('[aria-label="Portainer endpoint"]')!;
     select.value = "synEndpoint";
     select.dispatchEvent(new Event("change"));
     await editor.updateComplete;
@@ -598,7 +598,7 @@ describe("Visual editor", () => {
       source.value = "manual";
       source.dispatchEvent(new Event("change"));
       await editor.updateComplete;
-      expect(editor.shadowRoot!.querySelector('[aria-label="Synology Portainer endpoint"]')).toBeNull();
+      expect(editor.shadowRoot!.querySelector('[aria-label="Portainer endpoint"]')).toBeNull();
       const add = [...editor.shadowRoot!.querySelectorAll("button")].find((button) => button.textContent === "Add container")!;
       add.click();
       await editor.updateComplete;

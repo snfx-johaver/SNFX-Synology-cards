@@ -1,15 +1,9 @@
 import { LitElement, html, nothing, type PropertyValues, type TemplateResult } from "lit";
-import { containerSource, containerStates, type CardConfig } from "./config";
+import { containerSource, containerStates, nasSource, nasSourceNames, usesRegistryDiscovery, type CardConfig } from "./config";
 import { dashboardCardStyles } from "./dashboard-cards-styles";
 import { fireEvent, type HassEntity, type HomeAssistant } from "./ha-types";
-import { belongsTo, cachedRegistries, deviceEntity, loadRegistries, selectedDevice, synologyDevices, type Registries } from "./data";
+import { belongsTo, cachedRegistries, loadRegistries, nasDevices, overviewEntity, safeUrl, selectedDevice, type Registries } from "./data";
 import { iconTemplate } from "./icons";
-
-const entityKeys: Record<string, string> = {
-  cpu_usage: "cpu_total_load", ram_usage: "memory_real_usage",
-  system_temperature: "temperature", uptime: "uptime",
-  security_status: "status", network_rx: "network_down", network_tx: "network_up",
-};
 
 export abstract class BaseSynologyCard extends LitElement {
   static override styles = dashboardCardStyles;
@@ -20,8 +14,13 @@ export abstract class BaseSynologyCard extends LitElement {
   static async getStubConfig(this: { editorTag: string }, hass?: HomeAssistant): Promise<CardConfig> {
     const config: CardConfig = { type: `custom:${this.editorTag.replace(/-editor$/, "")}` };
     if (hass) {
-      const devices = synologyDevices(await loadRegistries(hass));
-      if (devices.length === 1) config.server = devices[0]!.id;
+      const registries = await loadRegistries(hass);
+      const synology = nasDevices(registries, "synology_dsm");
+      const qnap = nasDevices(registries, "qnap");
+      if (synology.length + qnap.length === 1) {
+        config.server = (synology[0] ?? qnap[0])!.id;
+        if (qnap.length) config.nas_source = "qnap";
+      }
     }
     return config;
   }
@@ -54,8 +53,8 @@ export abstract class BaseSynologyCard extends LitElement {
     const previous = changes.get("hass");
     if (!previous || !this.hass) return true;
     if ((previous.connection ?? previous.callWS) !== (this.hass.connection ?? this.hass.callWS)) return true;
-    if (!this.hass.callWS && (previous.devices !== this.hass.devices || previous.entities !== this.hass.entities)) return true;
-    const snapshot = cachedRegistries(this.hass);
+    if (usesRegistryDiscovery(this.config) && !this.hass.callWS && (previous.devices !== this.hass.devices || previous.entities !== this.hass.entities)) return true;
+    const snapshot = usesRegistryDiscovery(this.config) ? cachedRegistries(this.hass) : undefined;
     if (snapshot && snapshot !== this.registries) return true;
     this.updateWatchedEntities();
     return this.watchedEntities.some((id) => this.renderedStates.get(id) !== this.hass!.states[id]);
@@ -68,6 +67,13 @@ export abstract class BaseSynologyCard extends LitElement {
       const source = docker ? containerSource(this.config) : "disabled";
       const endpoint = source === "portainer" ? this.config.portainer_endpoint : undefined;
       const ids = new Set(Object.values(this.config.entities ?? {}));
+      if (nasSource(this.config) === "manual") {
+        for (const item of [...(this.config.volumes ?? []), ...(this.config.drives ?? [])]) {
+          for (const [key, value] of Object.entries(item)) {
+            if (key.endsWith("_entity") && value) ids.add(value);
+          }
+        }
+      }
       if (source === "manual") {
         for (const container of this.config.containers ?? []) {
           for (const [key, value] of Object.entries(container)) {
@@ -77,7 +83,7 @@ export abstract class BaseSynologyCard extends LitElement {
       }
       for (const entity of Object.values(this.registries.entities)) {
         const device = entity.device_id ? this.registries.devices[entity.device_id] : undefined;
-        if ((server && entity.platform === "synology_dsm" && belongsTo(device, server, this.registries.devices)) ||
+        if ((server && entity.platform === nasSource(this.config) && belongsTo(device, server, this.registries.devices)) ||
             (endpoint && entity.platform === "portainer" && belongsTo(device, endpoint, this.registries.devices))) ids.add(entity.entity_id);
       }
       this.watchedEntities = [...ids];
@@ -95,7 +101,13 @@ export abstract class BaseSynologyCard extends LitElement {
   override willUpdate(changes: PropertyValues<this>): void {
     super.willUpdate(changes);
     this.toggleAttribute("embedded", !!this.config.embedded);
-    if (changes.has("hass") && this.hass) {
+    if ((changes.has("hass") || changes.has("config")) && this.hass) {
+      if (!usesRegistryDiscovery(this.config)) {
+        this.requestVersion++;
+        this.registryKey = undefined;
+        this.registryError = "";
+        return;
+      }
       const key = this.hass.connection ?? this.hass.callWS ?? this.hass;
       if (!this.hass.callWS) {
         this.registries = { devices: this.hass.devices ?? {}, entities: this.hass.entities ?? {} };
@@ -123,7 +135,29 @@ export abstract class BaseSynologyCard extends LitElement {
 
   setConfig(config: CardConfig): void {
     if (!config || typeof config.type !== "string") throw new Error("Invalid card configuration");
-    if (config.server !== undefined && typeof config.server !== "string") throw new Error("Select a Synology device registry ID");
+    if (config.nas_source !== undefined && !Object.hasOwn(nasSourceNames, config.nas_source)) {
+      throw new Error("NAS source must be synology_dsm, qnap or manual");
+    }
+    if (config.server !== undefined && typeof config.server !== "string") throw new Error("Select a NAS device registry ID");
+    for (const key of ["name", "network_interface", "management_url"] as const) {
+      if (config[key] !== undefined && typeof config[key] !== "string") throw new Error(`${key} must be a string`);
+    }
+    if (config.management_url && !safeUrl(config.management_url)) throw new Error("NAS management URL must use HTTP or HTTPS");
+    for (const key of ["volumes", "drives"] as const) {
+      const items = config[key];
+      if (items === undefined) continue;
+      if (!Array.isArray(items)) throw new Error(`Manual ${key} must be a list`);
+      for (const item of items) {
+        if (!item || typeof item !== "object" || Array.isArray(item)) throw new Error(`Each manual ${key} entry must be an entity mapping`);
+        for (const [field, value] of Object.entries(item)) {
+          if (typeof value !== "string") throw new Error(`Manual ${key} ${field} must be a string`);
+          const domain = ["bad_sectors_entity", "remaining_life_entity"].includes(field) ? "binary_sensor" : "sensor";
+          if (field.endsWith("_entity") && value && !new RegExp(`^${domain}\\.[a-z0-9_]+$`).test(value)) {
+            throw new Error(`Unsupported entity for ${key} ${field}: ${value}`);
+          }
+        }
+      }
+    }
     if (config.portainer_endpoint !== undefined && typeof config.portainer_endpoint !== "string") throw new Error("Select a Portainer endpoint device registry ID");
     if (config.view_mode !== undefined && !["grid", "list"].includes(config.view_mode)) throw new Error("Container layout must be grid or list");
     if (config.container_source !== undefined && !["disabled", "portainer", "manual"].includes(config.container_source)) {
@@ -166,9 +200,7 @@ export abstract class BaseSynologyCard extends LitElement {
   getGridOptions() { return { columns: "full", rows: "auto", min_columns: 3 }; }
   protected getActiveDevice() { return selectedDevice(this.config, this.registries); }
   protected getEntity(key: string, domain?: string) {
-    const mapped = this.config.entities?.[key];
-    if (mapped) return this.hass?.states[mapped];
-    return deviceEntity(this.hass, this.registries, this.getActiveDevice()?.id, entityKeys[key] ?? key, domain);
+    return overviewEntity(this.hass, this.config, this.registries, key, domain);
   }
   protected openMoreInfo(entityId: string): void { fireEvent(this, "hass-more-info", { entityId }); }
   protected async runAction(domain: string, service: string, entityId: string): Promise<void> {

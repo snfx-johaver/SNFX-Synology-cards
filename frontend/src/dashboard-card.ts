@@ -1,5 +1,5 @@
 import { html, nothing, type TemplateResult } from "lit";
-import { containerSource, DASHBOARD_CARD_TAG, DASHBOARD_EDITOR_TAG } from "./config";
+import { containerSource, nasSource, DASHBOARD_CARD_TAG, DASHBOARD_EDITOR_TAG } from "./config";
 import { BaseSynologyCard } from "./dashboard-cards-base";
 import { SynologyDashboardCardEditor } from "./dashboard-cards-editor";
 import { iconTemplate, mdiDocker, mdiHarddisk, mdiServer } from "./icons";
@@ -24,9 +24,9 @@ export class SynologyDashboardCard extends BaseSynologyCard {
     const active = visible.some((tab) => tab.key === this._activeTab) ? this._activeTab : visible[0]?.key;
     const child = (type: string) => ({ ...this.config, title: undefined, type: `custom:synology-${type}-card`, embedded: true });
     return html`<ha-card style="gap:12px">
-      ${this.renderHeader(`${this.config.title || device?.name_by_user || device?.name || "Synology NAS"} Dashboard`, "Unified Synology Control Center", mdiServer)}
+      ${this.renderHeader(`${this.config.title || this.config.name || device?.name_by_user || device?.name || (nasSource(this.config) === "synology_dsm" ? "Synology NAS" : nasSource(this.config) === "qnap" ? "QNAP NAS" : "NAS")} Dashboard`, "Unified NAS Control Center", mdiServer)}
       ${this.renderErrors()}
-      <div class="tab-strip" role="tablist" aria-label="Synology dashboard">
+      <div class="tab-strip" role="tablist" aria-label="NAS dashboard">
         ${visible.map((tab) => html`<button role="tab" aria-selected=${active === tab.key} class="tab-btn ${active === tab.key ? "active" : ""}"
           @click=${() => this._activeTab = tab.key}>${iconTemplate(tab.icon, 14)} ${tab.label}</button>`)}
       </div><div role="tabpanel">
@@ -40,5 +40,5 @@ export class SynologyDashboardCard extends BaseSynologyCard {
 }
 registerDashboardCard({
   tag: DASHBOARD_CARD_TAG, editorTag: DASHBOARD_EDITOR_TAG, card: SynologyDashboardCard, editor: SynologyDashboardCardEditor,
-  name: "Synology Unified Dashboard Card", description: "Synology DSM dashboard with optional Portainer or manually mapped container entities.",
+  name: "NAS Unified Dashboard Card", description: "Synology DSM, QNAP or manual NAS dashboard with optional containers.",
 });

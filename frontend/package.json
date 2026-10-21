@@ -1,9 +1,9 @@
 {
   "name": "synology-dashboard-cards",
   "private": true,
-  "version": "3.0.0",
+  "version": "3.1.0",
   "type": "module",
-  "description": "Custom Lovelace dashboard cards for Synology Home Assistant integration",
+  "description": "Frontend-only NAS dashboard cards for Synology DSM, QNAP and manual Home Assistant entities",
   "scripts": {
     "build": "node scripts/build.mjs",
     "typecheck": "tsc --noEmit",

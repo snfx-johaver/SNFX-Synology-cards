@@ -10,6 +10,31 @@ export const DOCKER_EDITOR_TAG = "synology-docker-card-editor";
 export const DASHBOARD_CARD_TAG = "synology-dashboard-card";
 export const DASHBOARD_EDITOR_TAG = "synology-dashboard-card-editor";
 
+export type NasSource = "synology_dsm" | "qnap" | "manual";
+
+export const nasSourceNames: Record<NasSource, string> = {
+  synology_dsm: "Synology DSM", qnap: "QNAP", manual: "Manual entities",
+};
+
+export interface ManualVolumeConfig {
+  name?: string;
+  usage_entity?: string;
+  total_entity?: string;
+  used_entity?: string;
+  status_entity?: string;
+  temperature_entity?: string;
+}
+
+export interface ManualDriveConfig {
+  name?: string;
+  model_entity?: string;
+  status_entity?: string;
+  smart_entity?: string;
+  temperature_entity?: string;
+  bad_sectors_entity?: string;
+  remaining_life_entity?: string;
+}
+
 export interface ManualContainerConfig {
   name?: string;
   status_entity: string;
@@ -34,6 +59,11 @@ export function containerStates(container: ManualContainerConfig): { running: st
 export interface CardConfig {
   type: string;
   server?: string;
+  nas_source?: NasSource;
+  network_interface?: string;
+  management_url?: string;
+  volumes?: ManualVolumeConfig[];
+  drives?: ManualDriveConfig[];
   name?: string;
   title?: string;
   view_mode?: "grid" | "list";
@@ -49,7 +79,16 @@ export interface CardConfig {
   [key: string]: unknown;
 }
 
+export function nasSource(config: CardConfig): NasSource {
+  return config.nas_source ?? "synology_dsm";
+}
+
 export function containerSource(config: CardConfig): NonNullable<CardConfig["container_source"]> {
   return config.container_source ?? (config.portainer_endpoint ? "portainer"
     : config.containers?.length ? "manual" : config.type.includes("docker") ? "portainer" : "disabled");
+}
+
+export function usesRegistryDiscovery(config: CardConfig): boolean {
+  return (!config.type.includes("docker") && nasSource(config) !== "manual") ||
+    ((config.type.includes("docker") || config.type.includes("dashboard")) && containerSource(config) === "portainer");
 }

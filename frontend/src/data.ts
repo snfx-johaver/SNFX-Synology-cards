@@ -1,4 +1,4 @@
-import type { CardConfig } from "./config";
+import { nasSource, type CardConfig, type NasSource } from "./config";
 import type { DeviceRegistryEntry, EntityRegistryEntry, HassEntity, HomeAssistant } from "./ha-types";
 
 export interface Registries {
@@ -17,6 +17,7 @@ export function cachedRegistries(hass: HomeAssistant): Registries | undefined {
 interface RegistryIndex {
   entitiesByDevice: Map<string, EntityRegistryEntry[]>;
   synology: DeviceRegistryEntry[];
+  qnap: DeviceRegistryEntry[];
   endpoints: DeviceRegistryEntry[];
 }
 const registryIndexes = new WeakMap<Registries["devices"], WeakMap<Registries["entities"], RegistryIndex>>();
@@ -46,6 +47,9 @@ function registryIndex(registries: Registries): RegistryIndex {
   });
   const index = {
     entitiesByDevice, synology,
+    qnap: Object.values(registries.devices).filter((device) =>
+      entitiesByDevice.get(device.id)?.some((entity) => entity.platform === "qnap" &&
+        ["cpu_usage", "memory_percent_used", "system_temp", "uptime"].some((key) => entityMatches(entity, key))) ?? false),
     endpoints: Object.values(registries.devices).filter((device) => hasDomain(device, "portainer") && device.model === "Endpoint"),
   };
   indexes.set(registries.entities, index);
@@ -100,6 +104,10 @@ export function synologyDevices(registries: Registries): DeviceRegistryEntry[] {
   return registryIndex(registries).synology;
 }
 
+export function nasDevices(registries: Registries, source: NasSource): DeviceRegistryEntry[] {
+  return source === "synology_dsm" ? synologyDevices(registries) : source === "qnap" ? registryIndex(registries).qnap : [];
+}
+
 export function portainerEndpoints(registries: Registries): DeviceRegistryEntry[] {
   return registryIndex(registries).endpoints;
 }
@@ -129,9 +137,83 @@ export function deviceEntity(
 }
 
 export function selectedDevice(config: CardConfig, registries: Registries): DeviceRegistryEntry | undefined {
-  const devices = synologyDevices(registries);
+  const devices = nasDevices(registries, nasSource(config));
   if (config.server) return devices.find((device) => device.id === config.server);
   return devices.length === 1 ? devices[0] : undefined;
+}
+
+const overviewKeys: Record<Exclude<NasSource, "manual">, Record<string, string>> = {
+  synology_dsm: {
+    cpu_usage: "cpu_total_load", ram_usage: "memory_real_usage", system_temperature: "temperature",
+    security_status: "status", network_rx: "network_down", network_tx: "network_up",
+  },
+  qnap: {
+    cpu_usage: "cpu_usage", ram_usage: "memory_percent_used", system_temperature: "system_temp",
+    memory_total_real: "memory_size", memory_available_real: "memory_free", memory_used: "memory_used",
+    system_status: "status",
+  },
+};
+
+const qnapGroupKeys = {
+  volumes: ["volume_percentage_used", "volume_size_total", "volume_size_used", "volume_size_free"],
+  drives: ["drive_smart_status", "drive_temp"],
+  network: ["network_rx", "network_tx", "network_link_status"],
+};
+
+interface QnapGroup {
+  id: string;
+  entities: Record<string, string>;
+}
+const qnapGroupCache = new WeakMap<EntityRegistryEntry[], Record<keyof typeof qnapGroupKeys, QnapGroup[]>>();
+
+export function qnapGroups(registries: Registries, deviceId: string | undefined, kind: keyof typeof qnapGroupKeys): QnapGroup[] {
+  if (!deviceId) return [];
+  const entries = deviceEntities(registries, deviceId);
+  let cached = qnapGroupCache.get(entries);
+  if (!cached) {
+    const collect = (keys: string[]): QnapGroup[] => {
+      const groups = new Map<string, QnapGroup>();
+      for (const entity of entries) {
+        if (entity.platform !== "qnap" || !entity.entity_id.startsWith("sensor.") || !entity.unique_id) continue;
+        for (const key of keys) {
+          if (entity.translation_key && entity.translation_key !== key) continue;
+          // QNAP keeps all NICs/volumes/drives on one NAS device: <serial>_<key>_<monitor_device>.
+          const marker = `_${key}_`;
+          const offset = entity.unique_id.indexOf(marker);
+          const id = offset >= 0 ? entity.unique_id.slice(offset + marker.length) : "";
+          if (!id) continue;
+          const group = groups.get(id) ?? { id, entities: {} };
+          group.entities[key] = entity.entity_id;
+          groups.set(id, group);
+          break;
+        }
+      }
+      return [...groups.values()].sort((a, b) => a.id.localeCompare(b.id, undefined, { numeric: true }));
+    };
+    cached = { volumes: collect(qnapGroupKeys.volumes), drives: collect(qnapGroupKeys.drives), network: collect(qnapGroupKeys.network) };
+    qnapGroupCache.set(entries, cached);
+  }
+  return cached[kind];
+}
+
+export function overviewEntity(
+  hass: HomeAssistant | undefined, config: CardConfig, registries: Registries, key: string, domain?: string,
+): HassEntity | undefined {
+  const mapped = config.entities?.[key];
+  if (mapped) return hass?.states[mapped];
+  const source = nasSource(config);
+  if (source === "manual") return undefined;
+  if (["model", "software_version"].includes(key) || (source === "qnap" && key === "security_status") ||
+      (source === "synology_dsm" && key === "system_status")) return undefined;
+  const deviceId = selectedDevice(config, registries)?.id;
+  if (source === "qnap" && ["network_rx", "network_tx"].includes(key)) {
+    const interfaces = qnapGroups(registries, deviceId, "network");
+    const nic = config.network_interface ? interfaces.find((group) => group.id === config.network_interface)
+      : interfaces.length === 1 ? interfaces[0] : undefined;
+    const id = nic?.entities[key];
+    return id ? hass?.states[id] : undefined;
+  }
+  return deviceEntity(hass, registries, deviceId, overviewKeys[source][key] ?? key, domain, source);
 }
 
 export function usable(entity?: HassEntity): boolean {
@@ -192,6 +274,7 @@ export function safeUrl(url: string | null | undefined): string | undefined {
 }
 
 export function nasChildren(config: CardConfig, registries: Registries): DeviceRegistryEntry[] {
+  if (nasSource(config) !== "synology_dsm") return [];
   const server = selectedDevice(config, registries);
   if (!server) return [];
   return Object.values(registries.devices).filter((device) =>
@@ -201,7 +284,29 @@ export function nasChildren(config: CardConfig, registries: Registries): DeviceR
   );
 }
 
-export function volumeData(hass: HomeAssistant | undefined, config: CardConfig, registries: Registries) {
+export interface VolumeData {
+  device: { id: string; name: string; name_by_user?: string | null };
+  usage?: HassEntity;
+  status?: HassEntity;
+  total?: HassEntity;
+  used?: HassEntity;
+  temperature?: HassEntity;
+}
+
+export function volumeData(hass: HomeAssistant | undefined, config: CardConfig, registries: Registries): VolumeData[] {
+  const source = nasSource(config);
+  if (source === "manual") return (config.volumes ?? []).map((volume, index) => ({
+    device: { id: `manual-volume-${index}`, name: volume.name || `Volume ${index + 1}` },
+    usage: hass?.states[volume.usage_entity ?? ""], status: hass?.states[volume.status_entity ?? ""],
+    total: hass?.states[volume.total_entity ?? ""], used: hass?.states[volume.used_entity ?? ""],
+    temperature: hass?.states[volume.temperature_entity ?? ""],
+  }));
+  if (source === "qnap") return qnapGroups(registries, selectedDevice(config, registries)?.id, "volumes").map((group) => ({
+    device: { id: group.id, name: group.id },
+    usage: hass?.states[group.entities.volume_percentage_used ?? ""],
+    total: hass?.states[group.entities.volume_size_total ?? ""],
+    used: hass?.states[group.entities.volume_size_used ?? ""],
+  }));
   return nasChildren(config, registries).filter((device) =>
     deviceEntities(registries, device.id).some((entity) =>
       entity.platform === "synology_dsm" &&
@@ -213,6 +318,48 @@ export function volumeData(hass: HomeAssistant | undefined, config: CardConfig, 
       device, usage: get("volume_percentage_used"), status: get("volume_status"),
       total: get("volume_size_total"), used: get("volume_size_used"),
       temperature: get("volume_disk_temp_avg"),
+    };
+  });
+}
+
+export interface DriveData {
+  id: string;
+  name: string;
+  model?: string;
+  status?: HassEntity;
+  smart?: HassEntity;
+  temperature?: HassEntity;
+  badSectors?: HassEntity;
+  remainingLife?: HassEntity;
+}
+
+export function driveData(hass: HomeAssistant | undefined, config: CardConfig, registries: Registries): DriveData[] {
+  const source = nasSource(config);
+  if (source === "manual") return (config.drives ?? []).map((drive, index) => {
+    const model = hass?.states[drive.model_entity ?? ""];
+    return {
+      id: `manual-drive-${index}`, name: drive.name || `Drive ${index + 1}`,
+      model: usable(model) ? model!.state : undefined,
+      status: hass?.states[drive.status_entity ?? ""], smart: hass?.states[drive.smart_entity ?? ""],
+      temperature: hass?.states[drive.temperature_entity ?? ""],
+      badSectors: hass?.states[drive.bad_sectors_entity ?? ""], remainingLife: hass?.states[drive.remaining_life_entity ?? ""],
+    };
+  });
+  if (source === "qnap") return qnapGroups(registries, selectedDevice(config, registries)?.id, "drives").map((group) => {
+    const smart = hass?.states[group.entities.drive_smart_status ?? ""];
+    const temperature = hass?.states[group.entities.drive_temp ?? ""];
+    const model = smart?.attributes.Model ?? temperature?.attributes.Model;
+    return { id: group.id, name: group.id, model: typeof model === "string" ? model : undefined, smart, temperature };
+  });
+  return nasChildren(config, registries).filter((device) =>
+    deviceEntities(registries, device.id).some((entity) => entity.platform === "synology_dsm" &&
+      (entityMatches(entity, "disk_status") || entity.entity_id.endsWith("_disk_status")))
+  ).map((device) => {
+    const get = (key: string, domain = "sensor") => deviceEntity(hass, registries, device.id, key, domain);
+    return {
+      id: device.id, name: device.name_by_user || device.name, model: device.model ?? undefined,
+      status: get("disk_status"), smart: get("disk_smart_status"), temperature: get("disk_temp"),
+      badSectors: get("disk_exceed_bad_sector_thr", "binary_sensor"), remainingLife: get("disk_below_remain_life_thr", "binary_sensor"),
     };
   });
 }
